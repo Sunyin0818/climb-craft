@@ -1,4 +1,4 @@
-import Stage from '@/components/canvas/Stage';
+import StageDynamic from '@/components/canvas/StageDynamic';
 import Sidebar from '@/components/ui/Sidebar';
 import Inventory from '@/components/ui/Inventory';
 import PriceTag from '@/components/ui/PriceTag';
@@ -8,7 +8,7 @@ export default function Home() {
     <main className="relative w-screen h-screen overflow-hidden bg-neutral-950 font-sans">
       {/* 3D Canvas Layer */}
       <div className="absolute inset-0 z-0">
-        <Stage />
+        <StageDynamic />
       </div>
 
       {/* 2D UI Overlay Layer */}

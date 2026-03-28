@@ -1,6 +1,9 @@
 import { create } from 'zustand';
+import { CoordinateUtils } from '@/core/utils/CoordinateUtils';
 
 export type ConnectorShape = '3WAY' | '4WAY' | '5WAY' | '6WAY' | 'L' | 'T' | 'STRAIGHT' | 'UNKNOWN';
+export type SelectedTool = 'NONE' | 'PIPE_LONG' | 'PIPE_MEDIUM' | 'PIPE_SHORT';
+
 
 export interface NodeInstance {
   id: string; // 逻辑坐标组合 "x,y,z"
@@ -21,14 +24,64 @@ interface SceneState {
   nodes: Record<string, NodeInstance>;
   edges: Record<string, EdgeInstance>;
   
-  addPart: (type: 'PIPE' | 'CONN', position: [number, number, number]) => void;
+  selectedTool: SelectedTool;
+  setSelectedTool: (tool: SelectedTool) => void;
+  
+  placePipe: (start: [number, number, number], end: [number, number, number], length: number) => void;
 }
 
-export const useSceneStore = create<SceneState>((_set) => ({
+// 辅助方法：计算每个节点的连接情况推断 Shape
+const recalculateNodeShapes = (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>) => {
+  const newNodes = { ...nodes };
+  
+  Object.keys(newNodes).forEach(nodeId => {
+    // 找出所有连接到此节点 Edge
+    const connectedEdges = Object.values(edges).filter(e => e.start === nodeId || e.end === nodeId);
+    const count = connectedEdges.length;
+    
+    let shape: ConnectorShape = 'UNKNOWN';
+    if (count === 1) shape = 'STRAIGHT'; // 端点
+    else if (count === 2) {
+      // 检查两根管子是否在同一条直线上（X相加，Y不变等），比较粗糙的判断，TODO 进一步向量分析
+      shape = 'L'; // 默认可能是直角弯头，如果是直线则是 STRAIGHT
+    } else if (count === 3) shape = '3WAY'; // 或者是 'T'
+    else if (count === 4) shape = '4WAY';
+    else if (count === 5) shape = '5WAY';
+    else if (count === 6) shape = '6WAY';
+    
+    newNodes[nodeId] = { ...newNodes[nodeId], shape };
+  });
+  
+  return newNodes;
+};
+
+export const useSceneStore = create<SceneState>((set) => ({
   nodes: {},
   edges: {},
+  selectedTool: 'NONE',
   
-  addPart: (type, position) => {
-    console.log('TODO: implement addPart', type, position);
-  }
+  setSelectedTool: (tool) => set({ selectedTool: tool }),
+  
+  placePipe: (start, end, length) => set((state) => {
+    const startId = start.join(',');
+    const endId = end.join(',');
+    const edgeId = CoordinateUtils.getEdgeKey(start, end);
+    
+    // 如果边已存在，不重复添加
+    if (state.edges[edgeId]) return state;
+    
+    const newNodes = { ...state.nodes };
+    if (!newNodes[startId]) newNodes[startId] = { id: startId, position: start, type: 'CONN', shape: 'UNKNOWN' };
+    if (!newNodes[endId]) newNodes[endId] = { id: endId, position: end, type: 'CONN', shape: 'UNKNOWN' };
+    
+    const newEdges: Record<string, EdgeInstance> = {
+      ...state.edges,
+      [edgeId]: { id: edgeId, start: startId, end: endId, type: 'PIPE', length }
+    };
+    
+    return {
+      nodes: recalculateNodeShapes(newNodes, newEdges),
+      edges: newEdges
+    };
+  })
 }));
