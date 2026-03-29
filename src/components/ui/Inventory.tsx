@@ -2,12 +2,14 @@
 
 import { useSceneStore, type ConnectorShape } from '@/store/useSceneStore';
 import { useLocaleStore } from '@/store/useLocaleStore';
+import { useInventoryStore, computeUsedCounts, PartType } from '@/store/useInventoryStore';
 
 export default function Inventory() {
   const nodes = useSceneStore((state) => state.nodes);
   const edges = useSceneStore((state) => state.edges);
   const t = useLocaleStore((state) => state.t);
-  
+  const { stock, price } = useInventoryStore();
+
   const connCounts: Record<string, number> = {};
   Object.values(nodes).forEach(node => {
     const shape = node.shape || 'UNKNOWN';
@@ -26,37 +28,85 @@ export default function Inventory() {
     return `${t.inventory.pipe} (${len * 50}mm)`;
   };
 
-  const pipeBom = Object.entries(pipeCounts).map(([lenStr, count]) => {
-    const len = Number(lenStr);
-    let price = 10.0;
-    if (len === 8) price = 15.0;
-    else if (len === 6) price = 12.0;
-    return { name: getPipeName(len), count, price };
-  }).sort((a, b) => b.price - a.price);
+  const stockBom: { name: string, count: number }[] = [];
+  const excessBom: { name: string, count: number, price: number, totalLinePrice: number }[] = [];
 
-  const bom = [
-    ...pipeBom,
-    ...Object.entries(connCounts).map(([shape, count]) => ({
-      name: t.inventory.connectors[shape as ConnectorShape],
-      count,
-      price: 5.0
-    }))
-  ].filter(item => item.count > 0);
+  // 计算管线
+  Object.entries(pipeCounts).forEach(([lenStr, count]) => {
+    const len = Number(lenStr);
+    const pType = lenStr as PartType;
+    const available = stock[pType] || 0;
+    const unitPrice = price[pType] || 0;
+    
+    const usedStock = Math.min(count, available);
+    const excess = Math.max(0, count - available);
+
+    const name = getPipeName(len);
+    if (usedStock > 0) stockBom.push({ name, count: usedStock });
+    if (excess > 0) excessBom.push({ name, count: excess, price: unitPrice, totalLinePrice: excess * unitPrice });
+  });
+
+  // 计算接头（统扣逻辑：CONN 总量统扣）
+  let remainingConnStock = stock['CONN'] || 0;
+  Object.entries(connCounts).forEach(([shape, count]) => {
+    const usedStock = Math.min(count, remainingConnStock);
+    const excess = Math.max(0, count - remainingConnStock);
+    remainingConnStock = Math.max(0, remainingConnStock - count);
+
+    const unitPrice = price['CONN'] || 0;
+    const name = t.inventory.connectors[shape as ConnectorShape];
+    if (usedStock > 0) stockBom.push({ name, count: usedStock });
+    if (excess > 0) excessBom.push({ name, count: excess, price: unitPrice, totalLinePrice: excess * unitPrice });
+  });
+
+  const totalItems = stockBom.length + excessBom.length;
 
   return (
-    <div className="absolute top-0 right-0 max-h-[50%] w-72 bg-white/10 backdrop-blur-md border-b border-l border-white/20 p-6 flex flex-col gap-4 text-white z-10 rounded-bl-3xl shadow-2xl">
+    <div className="absolute top-0 right-0 max-h-[100%] max-w-[360px] w-[360px] bg-white/10 backdrop-blur-md border-b border-l border-white/20 p-6 flex flex-col gap-4 text-white z-10 rounded-bl-3xl shadow-2xl overflow-y-auto">
       <h3 className="font-semibold tracking-wide text-white/90 border-b border-white/10 pb-2">{t.inventory.title}</h3>
-      <ul className="text-sm space-y-3 mt-2">
-        {bom.map((item, idx) => (
-          <li key={idx} className="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-white/5">
-            <span className="text-white/80">{item.name}</span>
-            <span className="font-mono bg-white/10 px-2 py-0.5 rounded text-cyan-200">x{item.count}</span>
-          </li>
-        ))}
-        {bom.length === 0 && (
-          <li className="text-white/40 italic text-center py-4">{t.inventory.empty}</li>
+      
+      <div className="space-y-4">
+        {stockBom.length > 0 && (
+          <div>
+            <div className="text-xs uppercase tracking-widest text-emerald-400 font-bold mb-2">消耗自有库存 (无成本)</div>
+            <ul className="text-sm space-y-2">
+              {stockBom.map((item, idx) => (
+                <li key={idx} className="flex justify-between items-center bg-white/5 px-3 py-2 rounded-lg border border-emerald-500/20">
+                  <span className="text-white/80">{item.name}</span>
+                  <span className="font-mono bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded">x{item.count}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
-      </ul>
+
+        {excessBom.length > 0 && (
+          <div>
+            <div className="text-xs uppercase tracking-widest text-red-400 font-bold mb-2 flex justify-between">
+              <span>需新购零件 (超限)</span>
+              <span className="text-red-300">计价单</span>
+            </div>
+            <ul className="text-sm space-y-2">
+              {excessBom.map((item, idx) => (
+                <li key={`ex-${idx}`} className="flex flex-col bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/30 gap-1">
+                  <div className="flex justify-between items-center w-full">
+                    <span className="text-white/90 font-medium">{item.name}</span>
+                    <span className="font-mono bg-red-500/20 text-red-300 px-2 py-0.5 rounded font-bold text-xs">x{item.count}</span>
+                  </div>
+                  <div className="flex justify-between items-center w-full text-xs text-white/50">
+                    <span>@{t.priceTag.currency}{item.price.toFixed(2)}</span>
+                    <span className="text-red-400 font-mono font-bold">{t.priceTag.currency}{item.totalLinePrice.toFixed(2)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {totalItems === 0 && (
+          <div className="text-white/40 italic text-center py-4">{t.inventory.empty}</div>
+        )}
+      </div>
     </div>
   );
 }

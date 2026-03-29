@@ -5,10 +5,13 @@ import { ThreeEvent, Canvas } from '@react-three/fiber';
 import { Vector3, Quaternion } from 'three';
 import { OrbitControls, Grid } from '@react-three/drei';
 import { useSceneStore } from '@/store/useSceneStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
+import { useInventoryStore, computeUsedCounts, PartType } from '@/store/useInventoryStore';
 import { Snapping } from '@/core/engine/Snapping';
 import { isPointOnEdgeBody, isSegmentColliding } from '@/core/engine/CollisionUtils';
 import Pipe from './Pipe';
 import Connector from './Connector';
+import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 const AXES = [
   [0, 1, 0], [0, -1, 0],
@@ -42,12 +45,10 @@ function AxisCrosshair({ startPoint, length, onHover, onClick }: AxisCrosshairPr
             position={midPoint} 
             quaternion={quaternion}
           >
-            {/* 视觉细线渲染层: 极细的紫色高亮射线，与任何实体管件(红绿橙)彻底拉开视觉差距 */}
             <mesh>
               <cylinderGeometry args={[2, 2, length, 8]} />
               <meshBasicMaterial color="#d946ef" transparent opacity={0.8} depthTest={false} />
             </mesh>
-            {/* 物理碰撞隐形层 (极其肥大的半径 100，专门拯救平行射线的细线点不中问题) */}
             <mesh 
               onPointerMove={(e) => { e.stopPropagation(); onHover(target); }}
               onClick={(e) => { e.stopPropagation(); onClick(target); }}
@@ -61,8 +62,6 @@ function AxisCrosshair({ startPoint, length, onHover, onClick }: AxisCrosshairPr
     </group>
   );
 }
-
-import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 const checkWebGLSupport = () => {
   if (typeof window === 'undefined') return true;
@@ -84,6 +83,10 @@ export default function Stage() {
   const removePipe = useSceneStore(s => s.removePipe);
   const nodes = useSceneStore(s => s.nodes);
   const edges = useSceneStore(s => s.edges);
+  const t = useLocaleStore(s => s.t);
+  
+  const { stock, allowedExcess, setAllowedExcess } = useInventoryStore();
+  const [warningModal, setWarningModal] = useState<{ partType: PartType, label: string } | null>(null);
 
   const [startPoint, setStartPoint] = useState<[number, number, number] | null>(null);
   const [currentPoint, setCurrentPoint] = useState<[number, number, number] | null>(null);
@@ -91,8 +94,6 @@ export default function Stage() {
   
   const orbitRef = useRef<OrbitControlsImpl>(null);
 
-
-  // 预判错误状态
   const isStartHoverError = selectedTool !== 'NONE' && !startPoint && currentPoint
     ? isPointOnEdgeBody(currentPoint, edges, nodes) 
     : false;
@@ -103,7 +104,6 @@ export default function Stage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // 当按下 Delete 或 Backspace 且有选中的边时执行删除
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEdgeId) {
         removePipe(selectedEdgeId);
         setSelectedEdgeId(null);
@@ -130,17 +130,39 @@ export default function Stage() {
     return 0;
   };
 
+  const handleTryPlacePipe = (start: [number, number, number], end: [number, number, number], length: number): boolean => {
+    const counts = computeUsedCounts(nodes, edges);
+    const pipeType = String(length) as PartType;
+    
+    if (!allowedExcess[pipeType] && counts[pipeType] + 1 > stock[pipeType]) {
+      setWarningModal({ 
+        partType: pipeType, 
+        label: length === 8 ? t.sidebar.pipeLong.name : length === 6 ? t.sidebar.pipeMedium.name : t.sidebar.pipeShort.name 
+      });
+      return false;
+    }
+
+    const startStr = start.join(',');
+    const endStr = end.join(',');
+    let newConns = 0;
+    if (!nodes[startStr]) newConns++;
+    if (!nodes[endStr]) newConns++;
+
+    if (newConns > 0 && !allowedExcess['CONN'] && counts['CONN'] + newConns > stock['CONN']) {
+      setWarningModal({ partType: 'CONN', label: '接头元件' });
+      return false;
+    }
+
+    placePipe(start, end, length);
+    return true;
+  };
+
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     if (selectedTool === 'NONE') {
       setCurrentPoint(null);
       return;
     }
     
-    // point 是射线物理撞击平面的确切三维浮点坐标。
-    // BUG FIX: 地面碰撞器位于 Y=-25，由于渲染精度波动偶尔会变成 -25.01，
-    // 这会导致 Math.round(-25.01/50) = -1，从而将吸附点计算为 y=-50，
-    // 新建的管子会彻底卡进地砖底面(y=-30)下方导致视觉消失。
-    // 所以当我们捕获地面投射时，直接霸道地将其物理 Y 坐标锁死为 0。
     const snapped = Snapping.snapToGrid([e.point.x, 0, e.point.z]);
     
     if (!startPoint) {
@@ -157,7 +179,6 @@ export default function Stage() {
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     
-    // 如果点在空白处，清理当前选中的管子
     if (selectedEdgeId) {
       setSelectedEdgeId(null);
     }
@@ -165,22 +186,20 @@ export default function Stage() {
     if (selectedTool === 'NONE') return;
 
     if (!startPoint && currentPoint) {
-      if (isStartHoverError) return; // 拦截非法起点
-      setStartPoint(currentPoint); // 锁定起点
+      if (isStartHoverError) return;
+      setStartPoint(currentPoint);
     } else if (startPoint && currentPoint) {
-      // 若距离仍为0，阻止放置
       if (startPoint[0] === currentPoint[0] && startPoint[1] === currentPoint[1] && startPoint[2] === currentPoint[2]) return;
+      if (isSegmentError) return;
       
-      if (isSegmentError) return; // 拦截穿模路线
-      
-      placePipe(startPoint, currentPoint, getTargetLength());
-      setStartPoint(currentPoint); // 管子绘制完成后，让当前结束点直接成为下一个新起点（连续绘制）
+      if (handleTryPlacePipe(startPoint, currentPoint, getTargetLength())) {
+        setStartPoint(currentPoint);
+      }
     }
   };
   
   const handleContextMenu = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
-    // 取消选中状态或取消起画点
     if (selectedEdgeId) {
       setSelectedEdgeId(null);
     } else if (startPoint) {
@@ -203,17 +222,8 @@ export default function Stage() {
         </svg>
         <h2 className="text-2xl font-bold mb-4 tracking-wider">3D 引擎启动失败</h2>
         <p className="text-white/70 max-w-lg text-center leading-relaxed mb-6">
-          您的浏览器设备未能创建 WebGL 渲染上下文。这通常是因为您的设备不支持硬件图形加速、显卡驱动异常，或是浏览器禁用了此项功能。<br/>攀爬架模型渲染依赖该核心底层。
+          您的浏览器设备未能创建 WebGL 渲染上下文。
         </p>
-        <div className="bg-white/5 border border-white/10 rounded-xl p-4 w-full max-w-md">
-          <h4 className="font-semibold text-emerald-400 mb-2">解决方案指南：</h4>
-          <ul className="text-sm text-white/60 space-y-2 list-disc list-inside">
-            <li>请使用最新稳定版的 Chrome、Edge 或 Firefox 浏览器</li>
-            <li>进入浏览器设置，搜索并确保开启了<strong>“使用硬件加速”</strong></li>
-            <li>如果您在使用安全沙盒/远程连接，请确保穿透了 GPU 设备</li>
-            <li>尝试更新系统显卡驱动</li>
-          </ul>
-        </div>
       </div>
     );
   }
@@ -221,7 +231,6 @@ export default function Stage() {
   return (
     <div className="w-full h-full bg-neutral-900 border-none outline-none overflow-hidden m-0 p-0" onContextMenu={(e) => e.preventDefault()}>
       
-      {/* 视角复位与中心追踪按钮 */}
       <div className="absolute top-6 right-[350px] z-10 flex gap-4">
         <button 
           onClick={handleResetCamera}
@@ -231,7 +240,35 @@ export default function Stage() {
         </button>
       </div>
 
-      {/* 选中时的浮动删除按钮 */}
+      {warningModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-[#1e1e1e] border border-red-500/50 rounded-2xl w-[400px] shadow-[0_0_50px_rgba(239,68,68,0.2)] overflow-hidden">
+            <div className="bg-red-500/10 p-6 flex flex-col items-center border-b border-red-500/20">
+              <svg className="w-16 h-16 text-red-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              <h3 className="text-xl font-bold text-white tracking-wider">库存不足警告</h3>
+            </div>
+            <div className="p-6">
+              <p className="text-white/80 text-center leading-relaxed">
+                您的 <strong className="text-red-400 text-lg px-1">{warningModal.label}</strong> 预设库存量已耗尽。<br/><br/>
+                如果不做设计删减并强行挂载，超发部分将被计入<strong className="text-cyan-400 px-1">外单采购成本</strong>。
+              </p>
+            </div>
+            <div className="p-4 bg-black/20 flex gap-3 border-t border-white/5">
+              <button onClick={() => setWarningModal(null)} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 transition-colors font-medium">调整造型</button>
+              <button 
+                onClick={() => {
+                  setAllowedExcess(warningModal.partType, true);
+                  setWarningModal(null);
+                }} 
+                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-colors font-medium shadow-lg shadow-red-500/20"
+              >
+                继续添加 (算入成本)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedEdgeId && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-4">
           <button 
@@ -249,12 +286,10 @@ export default function Stage() {
         </div>
       )}
 
-      {/* 将初始摄像机移动至 [4000, 2500, 5000] 形成经典的 30 度角侧下斜视距，避免强烈的上帝视角俯视感 */}
       <Canvas camera={{ position: [4000, 2500, 5000], fov: 45, near: 50, far: 30000 }}>
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} intensity={1} />
         
-        {/* 地面坐标网格定位：放大到 8m x 8m (160LU x 160LU) 提升视野宏大感，将其放置在 Y=-24 */}
         <Grid
           args={[8000, 8000]}
           position={[0, -24, 0]}
@@ -268,19 +303,16 @@ export default function Stage() {
           infiniteGrid={false}
         />
         
-        {/* 蓝光边框：8040 放置于 Y=-40 与底板拉开巨大差距避免深度撕裂闪烁 */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -40, 0]}>
           <planeGeometry args={[8040, 8040]} />
           <meshBasicMaterial color="#3b82f6" />
         </mesh>
 
-        {/* 黑底底板 放置在 Y=-30 (与上方网格保持 6mm 精确级景深拉开差) */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -30, 0]}>
           <planeGeometry args={[8000, 8000]} />
           <meshStandardMaterial color="#111111" roughness={0.9} />
         </mesh>
         
-        {/* 透明射线碰撞接收器 保持在 Y=-25 让射线的交互逻辑平面完美卡在中间 */}
         <mesh 
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -25, 0]} 
@@ -320,12 +352,11 @@ export default function Stage() {
               onClick={(e) => {
                 e.stopPropagation();
                 setSelectedEdgeId(edge.id);
-                setStartPoint(null); // 点了管子就放弃原有的独立起点
+                setStartPoint(null);
               }}
             />
           );
         })}
-        {/* 交互过程的幻影渲染 */}
         {selectedTool !== 'NONE' && currentPoint && !startPoint && (
           <Connector position={currentPoint} isPreview isError={isStartHoverError} />
         )}
@@ -337,7 +368,6 @@ export default function Stage() {
           </group>
         )}
         
-        {/* 全新垂直向导十字线（单点延伸） */}
         {startPoint && !selectedEdgeId && (
           <AxisCrosshair 
             startPoint={startPoint} 
@@ -345,37 +375,39 @@ export default function Stage() {
             onHover={(target: [number, number, number]) => setCurrentPoint(target)}
             onClick={(target: [number, number, number]) => {
               if (isSegmentColliding(startPoint, target, edges, nodes)) return;
-              placePipe(startPoint, target, getTargetLength());
-              setStartPoint(target); // 保持操作锚点，允许顺藤摸瓜连续往天空造塔
+              if (handleTryPlacePipe(startPoint, target, getTargetLength())) {
+                setStartPoint(target);
+              }
             }}
           />
         )}
         
-        {/* 选中管子状态：两端双法线辅助线 */}
         {selectedEdgeId && edgeStartNode && edgeEndNode && !startPoint && (
           <group>
             <AxisCrosshair 
               startPoint={edgeStartNode.position} 
-              length={getTargetLength() > 0 ? getTargetLength() * 50 : 150} 
-              onHover={(target: [number, number, number]) => getTargetLength() > 0 && setCurrentPoint(target)}
-              onClick={(target: [number, number, number]) => {
+              length={getTargetLength() * 50} 
+              onHover={(target) => getTargetLength() > 0 && setCurrentPoint(target)}
+              onClick={(target) => {
                 if (getTargetLength() === 0) return;
                 if (isSegmentColliding(edgeStartNode.position, target, edges, nodes)) return;
-                placePipe(edgeStartNode.position, target, getTargetLength());
-                setSelectedEdgeId(null);
-                setStartPoint(target);
+                if (handleTryPlacePipe(edgeStartNode.position, target, getTargetLength())) {
+                  setSelectedEdgeId(null);
+                  setStartPoint(target);
+                }
               }}
             />
             <AxisCrosshair 
               startPoint={edgeEndNode.position} 
-              length={getTargetLength() > 0 ? getTargetLength() * 50 : 150} 
-              onHover={(target: [number, number, number]) => getTargetLength() > 0 && setCurrentPoint(target)}
-              onClick={(target: [number, number, number]) => {
+              length={getTargetLength() * 50} 
+              onHover={(target) => getTargetLength() > 0 && setCurrentPoint(target)}
+              onClick={(target) => {
                 if (getTargetLength() === 0) return;
                 if (isSegmentColliding(edgeEndNode.position, target, edges, nodes)) return;
-                placePipe(edgeEndNode.position, target, getTargetLength());
-                setSelectedEdgeId(null);
-                setStartPoint(target);
+                if (handleTryPlacePipe(edgeEndNode.position, target, getTargetLength())) {
+                  setSelectedEdgeId(null);
+                  setStartPoint(target);
+                }
               }}
             />
           </group>
