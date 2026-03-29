@@ -8,9 +8,11 @@ interface PipeProps {
   end: [number, number, number];
   isPreview?: boolean;
   isError?: boolean;
+  isSelected?: boolean;
+  onClick?: (e: any) => void;
 }
 
-const Pipe: React.FC<PipeProps> = ({ start, end, isPreview, isError }) => {
+const Pipe: React.FC<PipeProps> = ({ start, end, isPreview, isError, isSelected, onClick }) => {
   const [isHovered, setHovered] = useState(false);
 
   const dx = end[0] - start[0];
@@ -52,12 +54,13 @@ const Pipe: React.FC<PipeProps> = ({ start, end, isPreview, isError }) => {
       quaternion={quaternion}
       onPointerEnter={(e) => { e.stopPropagation(); setHovered(true); }}
       onPointerLeave={(e) => { e.stopPropagation(); setHovered(false); }}
+      onClick={onClick}
     >
       <cylinderGeometry args={[15, 15, pipeLength, 32]} />
       <meshStandardMaterial 
         color={matColor} 
         emissive={matColor}
-        emissiveIntensity={isHovered && !isPreview ? 0.4 : 0}
+        emissiveIntensity={isHovered || isSelected ? 0.4 : 0}
         transparent={isPreview || isError} 
         opacity={(isPreview || isError) ? 0.6 : 1} 
         metalness={0.2}

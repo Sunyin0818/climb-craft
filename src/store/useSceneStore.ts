@@ -28,6 +28,7 @@ interface SceneState {
   setSelectedTool: (tool: SelectedTool) => void;
   
   placePipe: (start: [number, number, number], end: [number, number, number], length: number) => void;
+  removePipe: (edgeId: string) => void;
 }
 
 // 辅助方法：计算每个节点的连接情况推断 Shape
@@ -79,6 +80,29 @@ export const useSceneStore = create<SceneState>((set) => ({
       [edgeId]: { id: edgeId, start: startId, end: endId, type: 'PIPE', length }
     };
     
+    return {
+      nodes: recalculateNodeShapes(newNodes, newEdges),
+      edges: newEdges
+    };
+  }),
+  
+  removePipe: (edgeId) => set((state) => {
+    if (!state.edges[edgeId]) return state;
+
+    const edge = state.edges[edgeId];
+    const newEdges = { ...state.edges };
+    delete newEdges[edgeId];
+
+    const newNodes = { ...state.nodes };
+    
+    // 如果起点被孤立（无其他边连结），则安全消灭此节点
+    const startOrphan = !Object.values(newEdges).some(e => e.start === edge.start || e.end === edge.start);
+    if (startOrphan) delete newNodes[edge.start];
+
+    // 如果终点被孤立，同理消灭此节点
+    const endOrphan = !Object.values(newEdges).some(e => e.start === edge.end || e.end === edge.end);
+    if (endOrphan) delete newNodes[edge.end];
+
     return {
       nodes: recalculateNodeShapes(newNodes, newEdges),
       edges: newEdges

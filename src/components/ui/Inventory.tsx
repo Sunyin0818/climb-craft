@@ -14,8 +14,28 @@ export default function Inventory() {
     connCounts[shape] = (connCounts[shape] || 0) + 1;
   });
 
+  const pipeCounts: Record<number, number> = {};
+  Object.values(edges).forEach(edge => {
+    pipeCounts[edge.length] = (pipeCounts[edge.length] || 0) + 1;
+  });
+
+  const getPipeName = (len: number) => {
+    if (len === 8) return t.sidebar.pipeLong.name;
+    if (len === 6) return t.sidebar.pipeMedium.name;
+    if (len === 4) return t.sidebar.pipeShort.name;
+    return `${t.inventory.pipe} (${len * 50}mm)`;
+  };
+
+  const pipeBom = Object.entries(pipeCounts).map(([lenStr, count]) => {
+    const len = Number(lenStr);
+    let price = 10.0;
+    if (len === 8) price = 15.0;
+    else if (len === 6) price = 12.0;
+    return { name: getPipeName(len), count, price };
+  }).sort((a, b) => b.price - a.price);
+
   const bom = [
-    { name: t.inventory.pipe, count: Object.keys(edges).length, price: 10.0 },
+    ...pipeBom,
     ...Object.entries(connCounts).map(([shape, count]) => ({
       name: t.inventory.connectors[shape as ConnectorShape],
       count,
