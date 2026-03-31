@@ -1,51 +1,45 @@
 import { create } from 'zustand';
+import { ConnectorShape } from './useSceneStore';
 
-export type PartType = '8' | '6' | '4' | 'CONN';
+export type PartType = '8' | '6' | '4' | 'STRAIGHT' | 'L' | 'T' | '3WAY' | '4WAY' | '5WAY' | '6WAY';
 
 interface InventoryState {
   stock: Record<PartType, number>;
   price: Record<PartType, number>;
-  allowedExcess: Record<PartType, boolean>;
 
   setStock: (part: PartType, val: number) => void;
   setPrice: (part: PartType, val: number) => void;
-  setAllowedExcess: (part: PartType, val: boolean) => void;
 }
 
 export const useInventoryStore = create<InventoryState>((set) => ({
-  // 默认初始库存设为 0（代表所有东西都需要花钱新买结算）
   stock: {
-    '8': 0, 
-    '6': 0, 
-    '4': 0, 
-    'CONN': 0,
+    '8': 0, '6': 0, '4': 0,
+    'STRAIGHT': 0, 'L': 0, 'T': 0, '3WAY': 0, '4WAY': 0, '5WAY': 0, '6WAY': 0,
   },
-  // 默认单价
   price: {
-    '8': 15.0,
-    '6': 12.0,
-    '4': 10.0,
-    'CONN': 5.0,
-  },
-  // 超发允许状态。如果在警告弹窗中点击了“继续添加”，对应类型会变成 true
-  allowedExcess: {
-    '8': false,
-    '6': false,
-    '4': false,
-    'CONN': false,
+    '8': 15.0, '6': 12.0, '4': 10.0,
+    'STRAIGHT': 2.0, 'L': 3.0, 'T': 4.0, '3WAY': 5.0, '4WAY': 6.0, '5WAY': 7.0, '6WAY': 8.0,
   },
 
   setStock: (part, MathMaxVal) => set((state) => ({ stock: { ...state.stock, [part]: Math.max(0, MathMaxVal) } })),
   setPrice: (part, MathMaxVal) => set((state) => ({ price: { ...state.price, [part]: Math.max(0, MathMaxVal) } })),
-  setAllowedExcess: (part, val) => set((state) => ({ allowedExcess: { ...state.allowedExcess, [part]: val } })),
 }));
 
 /**
  * 帮助函数：基于当前的 nodes 和 edges，计算全局的物料消耗件数
  */
 export const computeUsedCounts = (nodes: Record<string, any>, edges: Record<string, any>): Record<PartType, number> => {
-  const counts: Record<PartType, number> = { '8': 0, '6': 0, '4': 0, 'CONN': 0 };
-  counts['CONN'] = Object.keys(nodes).length;
+  const counts: Record<PartType, number> = { 
+    '8': 0, '6': 0, '4': 0, 
+    'STRAIGHT': 0, 'L': 0, 'T': 0, '3WAY': 0, '4WAY': 0, '5WAY': 0, '6WAY': 0
+  };
+  
+  Object.values(nodes).forEach(node => {
+    const shape = node.shape as ConnectorShape;
+    if (shape && shape !== 'UNKNOWN' && shape in counts) {
+      counts[shape as PartType] += 1;
+    }
+  });
   
   Object.values(edges).forEach(edge => {
     if (edge.length === 8) counts['8'] += 1;

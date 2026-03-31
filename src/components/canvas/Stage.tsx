@@ -4,10 +4,10 @@ import { useState, useRef, useEffect } from 'react';
 import { ThreeEvent, Canvas } from '@react-three/fiber';
 import { Vector3, Quaternion } from 'three';
 import { OrbitControls, Grid } from '@react-three/drei';
-import { useSceneStore } from '@/store/useSceneStore';
+import { useSceneStore, recalculateNodeShapes, ConnectorShape } from '@/store/useSceneStore';
 import { useLocaleStore } from '@/store/useLocaleStore';
-import { useInventoryStore, computeUsedCounts, PartType } from '@/store/useInventoryStore';
 import { Snapping } from '@/core/engine/Snapping';
+import { CoordinateUtils } from '@/core/utils/CoordinateUtils';
 import { isPointOnEdgeBody, isSegmentColliding } from '@/core/engine/CollisionUtils';
 import Pipe from './Pipe';
 import Connector from './Connector';
@@ -84,9 +84,6 @@ export default function Stage() {
   const nodes = useSceneStore(s => s.nodes);
   const edges = useSceneStore(s => s.edges);
   const t = useLocaleStore(s => s.t);
-  
-  const { stock, allowedExcess, setAllowedExcess } = useInventoryStore();
-  const [warningModal, setWarningModal] = useState<{ partType: PartType, label: string } | null>(null);
 
   const [startPoint, setStartPoint] = useState<[number, number, number] | null>(null);
   const [currentPoint, setCurrentPoint] = useState<[number, number, number] | null>(null);
@@ -131,28 +128,11 @@ export default function Stage() {
   };
 
   const handleTryPlacePipe = (start: [number, number, number], end: [number, number, number], length: number): boolean => {
-    const counts = computeUsedCounts(nodes, edges);
-    const pipeType = String(length) as PartType;
+    // 防止重复连线带来的重复扣减错误
+    const edgeId = CoordinateUtils.getEdgeKey(start, end);
+    if (edges[edgeId]) return false;
     
-    if (!allowedExcess[pipeType] && counts[pipeType] + 1 > stock[pipeType]) {
-      setWarningModal({ 
-        partType: pipeType, 
-        label: length === 8 ? t.sidebar.pipeLong.name : length === 6 ? t.sidebar.pipeMedium.name : t.sidebar.pipeShort.name 
-      });
-      return false;
-    }
-
-    const startStr = start.join(',');
-    const endStr = end.join(',');
-    let newConns = 0;
-    if (!nodes[startStr]) newConns++;
-    if (!nodes[endStr]) newConns++;
-
-    if (newConns > 0 && !allowedExcess['CONN'] && counts['CONN'] + newConns > stock['CONN']) {
-      setWarningModal({ partType: 'CONN', label: '接头元件' });
-      return false;
-    }
-
+    // 直接执行搭建变更（一切溢出计算全部交由 Inventory 和 PriceTag 渲染层静默分列成本）
     placePipe(start, end, length);
     return true;
   };
@@ -240,34 +220,6 @@ export default function Stage() {
         </button>
       </div>
 
-      {warningModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-[#1e1e1e] border border-red-500/50 rounded-2xl w-[400px] shadow-[0_0_50px_rgba(239,68,68,0.2)] overflow-hidden">
-            <div className="bg-red-500/10 p-6 flex flex-col items-center border-b border-red-500/20">
-              <svg className="w-16 h-16 text-red-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-              <h3 className="text-xl font-bold text-white tracking-wider">库存不足警告</h3>
-            </div>
-            <div className="p-6">
-              <p className="text-white/80 text-center leading-relaxed">
-                您的 <strong className="text-red-400 text-lg px-1">{warningModal.label}</strong> 预设库存量已耗尽。<br/><br/>
-                如果不做设计删减并强行挂载，超发部分将被计入<strong className="text-cyan-400 px-1">外单采购成本</strong>。
-              </p>
-            </div>
-            <div className="p-4 bg-black/20 flex gap-3 border-t border-white/5">
-              <button onClick={() => setWarningModal(null)} className="flex-1 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 transition-colors font-medium">调整造型</button>
-              <button 
-                onClick={() => {
-                  setAllowedExcess(warningModal.partType, true);
-                  setWarningModal(null);
-                }} 
-                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-colors font-medium shadow-lg shadow-red-500/20"
-              >
-                继续添加 (算入成本)
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {selectedEdgeId && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-4">

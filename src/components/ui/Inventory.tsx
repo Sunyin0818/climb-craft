@@ -46,15 +46,18 @@ export default function Inventory() {
     if (excess > 0) excessBom.push({ name, count: excess, price: unitPrice, totalLinePrice: excess * unitPrice });
   });
 
-  // 计算接头（统扣逻辑：CONN 总量统扣）
-  let remainingConnStock = stock['CONN'] || 0;
+  // 计算接头（按具体型号分别统计）
   Object.entries(connCounts).forEach(([shape, count]) => {
-    const usedStock = Math.min(count, remainingConnStock);
-    const excess = Math.max(0, count - remainingConnStock);
-    remainingConnStock = Math.max(0, remainingConnStock - count);
+    if (shape === 'UNKNOWN') return;
+    
+    const pType = shape as PartType;
+    const available = stock[pType] || 0;
+    const unitPrice = price[pType] || 0;
 
-    const unitPrice = price['CONN'] || 0;
-    const name = t.inventory.connectors[shape as ConnectorShape];
+    const usedStock = Math.min(count, available);
+    const excess = Math.max(0, count - available);
+
+    const name = t.inventory.connectors[shape as ConnectorShape] || shape;
     if (usedStock > 0) stockBom.push({ name, count: usedStock });
     if (excess > 0) excessBom.push({ name, count: excess, price: unitPrice, totalLinePrice: excess * unitPrice });
   });

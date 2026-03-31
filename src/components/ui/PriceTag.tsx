@@ -13,21 +13,15 @@ export default function PriceTag() {
   const counts = computeUsedCounts(nodes, edges);
   let totalPrice = 0;
 
-  // 计算管线超出部分的成本
-  ['8', '6', '4'].forEach((partType) => {
-    const pt = partType as PartType;
+  // 计算所有物料超出库存部分的增量成本
+  Object.keys(counts).forEach((key) => {
+    const pt = key as PartType;
     if (counts[pt] > 0) {
       const stored = stock[pt] || 0;
       const excess = Math.max(0, counts[pt] - stored);
       totalPrice += excess * (price[pt] || 0);
     }
   });
-
-  // 计算接头超出部分的成本 (统扣)
-  const totalConnUsed = counts['CONN'];
-  const storedConn = stock['CONN'] || 0;
-  const excessConn = Math.max(0, totalConnUsed - storedConn);
-  totalPrice += excessConn * (price['CONN'] || 0);
 
   if (totalPrice === 0) return null;
 

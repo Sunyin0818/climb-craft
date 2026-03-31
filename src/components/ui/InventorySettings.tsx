@@ -70,7 +70,13 @@ export default function InventorySettings({ onClose }: { onClose: () => void }) 
           <ConfigRow label={t.sidebar.pipeLong.name} part="8" />
           <ConfigRow label={t.sidebar.pipeMedium.name} part="6" />
           <ConfigRow label={t.sidebar.pipeShort.name} part="4" />
-          <ConfigRow label="基础黑球接头" part="CONN" />
+          <ConfigRow label={t.inventory.connectors.STRAIGHT} part="STRAIGHT" />
+          <ConfigRow label={t.inventory.connectors.L} part="L" />
+          <ConfigRow label={t.inventory.connectors.T} part="T" />
+          <ConfigRow label={t.inventory.connectors['3WAY']} part="3WAY" />
+          <ConfigRow label={t.inventory.connectors['4WAY']} part="4WAY" />
+          <ConfigRow label={t.inventory.connectors['5WAY']} part="5WAY" />
+          <ConfigRow label={t.inventory.connectors['6WAY']} part="6WAY" />
         </div>
 
         <div className="px-6 py-4 border-t border-white/10 bg-black/20 flex justify-end gap-3 shrink-0">

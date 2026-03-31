@@ -31,26 +31,48 @@ interface SceneState {
   removePipe: (edgeId: string) => void;
 }
 
-// 辅助方法：计算每个节点的连接情况推断 Shape
-const recalculateNodeShapes = (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>) => {
+export const recalculateNodeShapes = (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>) => {
   const newNodes = { ...nodes };
   
   Object.keys(newNodes).forEach(nodeId => {
+    const node = newNodes[nodeId];
     // 找出所有连接到此节点 Edge
     const connectedEdges = Object.values(edges).filter(e => e.start === nodeId || e.end === nodeId);
     const count = connectedEdges.length;
     
+    // 提取所有出射归一化向量
+    const D: [number, number, number][] = connectedEdges.map(e => {
+      const isStart = e.start === nodeId;
+      const otherId = isStart ? e.end : e.start;
+      const otherNode = newNodes[otherId] || { position: otherId.split(',').map(Number) };
+      
+      const dx = otherNode.position[0] - node.position[0];
+      const dy = otherNode.position[1] - node.position[1];
+      const dz = otherNode.position[2] - node.position[2];
+      const len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+      return [Math.round(dx/len), Math.round(dy/len), Math.round(dz/len)] as [number, number, number];
+    });
+
+    // 判断两个向量是否互为反义（共线）
+    const isOpposite = (v1: number[], v2: number[]) => v1[0] === -v2[0] && v1[1] === -v2[1] && v1[2] === -v2[2];
+
     let shape: ConnectorShape = 'UNKNOWN';
-    if (count === 1) shape = 'STRAIGHT'; // 端点
-    else if (count === 2) {
-      // 检查两根管子是否在同一条直线上（X相加，Y不变等），比较粗糙的判断，TODO 进一步向量分析
-      shape = 'L'; // 默认可能是直角弯头，如果是直线则是 STRAIGHT
-    } else if (count === 3) shape = '3WAY'; // 或者是 'T'
+    if (count === 1) {
+      shape = 'STRAIGHT'; // 单管默认插在一字通
+    } else if (count === 2) {
+      if (isOpposite(D[0], D[1])) shape = 'STRAIGHT'; // 180度直线对穿
+      else shape = 'L'; // 90度直角
+    } else if (count === 3) {
+      // 检查里面是否有任意两个是180度共线的
+      const hasLine = isOpposite(D[0], D[1]) || isOpposite(D[0], D[2]) || isOpposite(D[1], D[2]);
+      if (hasLine) shape = 'T'; // 平面 T字形
+      else shape = '3WAY'; // 空间直角三面三通
+    }
     else if (count === 4) shape = '4WAY';
     else if (count === 5) shape = '5WAY';
     else if (count === 6) shape = '6WAY';
     
-    newNodes[nodeId] = { ...newNodes[nodeId], shape };
+    newNodes[nodeId] = { ...node, shape };
   });
   
   return newNodes;
