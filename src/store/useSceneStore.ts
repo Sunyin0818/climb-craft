@@ -30,6 +30,9 @@ interface SceneState {
   
   placePipe: (start: [number, number, number], end: [number, number, number], length: number) => void;
   removePipe: (edgeId: string) => void;
+  
+  loadScene: (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>) => void;
+  clearScene: () => void;
 }
 
 export const recalculateNodeShapes = (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>) => {
@@ -141,5 +144,9 @@ export const useSceneStore = create<SceneState>((set) => ({
       nodes: recalculateNodeShapes(newNodes, newEdges),
       edges: newEdges
     };
-  })
+  }),
+
+  loadScene: (nodes, edges) => set({ nodes, edges }),
+  
+  clearScene: () => set({ nodes: {}, edges: {}, selectedTool: 'NONE' })
 }));

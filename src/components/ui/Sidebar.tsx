@@ -5,6 +5,7 @@ import { useSceneStore } from '@/store/useSceneStore';
 import clsx from 'clsx';
 import { useState, useMemo } from 'react';
 import InventorySettings from './InventorySettings';
+import ProjectManager from './ProjectManager';
 
 export default function Sidebar() {
   const t = useLocaleStore((state) => state.t);
@@ -12,6 +13,7 @@ export default function Sidebar() {
   const setSelectedTool = useSceneStore((state) => state.setSelectedTool);
   const nodes = useSceneStore((state) => state.nodes);
   const [showSettings, setShowSettings] = useState(false);
+  const [showProjectManager, setShowProjectManager] = useState(false);
 
   const { width, depth, height } = useMemo(() => {
     const nodeValues = Object.values(nodes);
@@ -35,27 +37,27 @@ export default function Sidebar() {
   }, [nodes]);
 
   return (
-    <div className="absolute top-0 left-0 h-full w-80 bg-white/10 backdrop-blur-md border-r border-white/20 p-6 flex flex-col gap-6 text-white z-10 shadow-2xl">
+    <div className="absolute top-0 left-0 h-full w-96 bg-white/10 backdrop-blur-md border-r border-white/20 p-6 flex flex-col gap-6 text-white z-10 shadow-2xl">
       <div className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-indigo-400 to-cyan-300">
         {t.app.title}
       </div>
 
       <div className="grid grid-cols-2 gap-3 -mt-2 mb-2">
-        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider mb-1">占地面积 (L×W)</span>
-          <span className="text-sm font-bold text-cyan-50">
+        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col min-w-0">
+          <span className="text-[10px] text-white/40 uppercase tracking-wider mb-1 truncate">占地面积 (L×W)</span>
+          <span className="text-sm font-bold text-cyan-50 truncate">
             {Object.keys(nodes).length > 0 ? `${(width/10).toFixed(0)} × ${(depth/10).toFixed(0)} cm` : '0 × 0 cm'}
           </span>
         </div>
-        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider mb-1">最大高度 (H)</span>
-          <span className="text-sm font-bold text-cyan-50">
+        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col min-w-0">
+          <span className="text-[10px] text-white/40 uppercase tracking-wider mb-1 truncate">最大高度 (H)</span>
+          <span className="text-sm font-bold text-cyan-50 truncate">
             {Object.keys(nodes).length > 0 ? `${(height/10).toFixed(0)} cm` : '0 cm'}
           </span>
         </div>
       </div>
       
-      <div className="flex-1 overflow-y-auto space-y-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 pr-1">
         <h3 className="text-xs uppercase tracking-widest text-white/50 font-semibold mb-2">{t.sidebar.title}</h3>
         
         {/* Mock Draggable Items */}
@@ -89,19 +91,32 @@ export default function Sidebar() {
           <div className="text-xs text-white/40">{t.sidebar.pipeShort.desc}</div>
         </div>
       </div>
-      <button 
-        onClick={() => setShowSettings(true)}
-        className="mt-auto flex items-center justify-center gap-2 p-3 text-sm font-medium text-white/60 hover:text-cyan-300 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/10 hover:border-cyan-500/30 group"
-      >
-        <svg className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-        库存配置与价格
-      </button>
+      <div className="flex flex-col gap-2 mt-auto">
+        <button 
+          onClick={() => setShowProjectManager(true)}
+          className="flex items-center justify-center gap-2 p-3 text-sm font-medium text-white/80 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/40 rounded-xl transition-all border border-indigo-400/30 hover:border-indigo-400 group shadow-lg"
+        >
+          <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+          </svg>
+          本地设计草稿库
+        </button>
+
+        <button 
+          onClick={() => setShowSettings(true)}
+          className="flex items-center justify-center gap-2 p-3 text-sm font-medium text-white/60 hover:text-cyan-300 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/10 hover:border-cyan-500/30 group"
+        >
+          <svg className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          库存配置与价格
+        </button>
+      </div>
       
-      <div className="text-xs text-white/30 text-center mt-2">
+      <div className="text-xs text-white/30 text-center mt-2 shrink-0">
         {t.app.version}
       </div>
 
       {showSettings && <InventorySettings onClose={() => setShowSettings(false)} />}
+      {showProjectManager && <ProjectManager onClose={() => setShowProjectManager(false)} />}
     </div>
   );
 }
