@@ -9,6 +9,7 @@ interface InstancedPipesProps {
   nodes: Record<string, any>;
   selectedEdgeId: string | null;
   onPipeClick: (edgeId: string, e: ThreeEvent<MouseEvent>) => void;
+  onPointerDown?: (e: ThreeEvent<PointerEvent>) => void;
 }
 
 const UNIT_CYLINDER = new THREE.CylinderGeometry(15, 15, 1, 32);
@@ -19,7 +20,7 @@ const TEMP_SCALE = new THREE.Vector3();
 const TEMP_COLOR = new THREE.Color();
 const DEFAULT_UP = new THREE.Vector3(0, 1, 0);
 
-export default function InstancedPipes({ edges, nodes, selectedEdgeId, onPipeClick }: InstancedPipesProps) {
+export default function InstancedPipes({ edges, nodes, selectedEdgeId, onPipeClick, onPointerDown }: InstancedPipesProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   
@@ -134,6 +135,7 @@ export default function InstancedPipes({ edges, nodes, selectedEdgeId, onPipeCli
       args={[UNIT_CYLINDER, undefined, 20000]} // Max 20,000 pipes support
       onPointerMove={handlePointerMove}
       onPointerOut={handlePointerOut}
+      onPointerDown={onPointerDown}
       onClick={handleClick}
       // Ensure bounding sphere encompasses everything to avoid frustum culling bugs
       frustumCulled={false} 

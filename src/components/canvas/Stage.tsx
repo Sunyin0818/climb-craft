@@ -30,9 +30,10 @@ interface AxisCrosshairProps {
   onHover: (target: [number, number, number]) => void;
   onClick: (target: [number, number, number]) => void;
   onError: (msg: string) => void;
+  onPointerDown: (e: ThreeEvent<PointerEvent>) => void;
 }
 
-function AxisCrosshair({ startPoint, length, onHover, onClick, onError }: AxisCrosshairProps) {
+function AxisCrosshair({ startPoint, length, onHover, onClick, onError, onPointerDown }: AxisCrosshairProps) {
   const midPoints = useMemo(() => {
     return AXES.map(v => new Vector3().copy(v).multiplyScalar(length / 2));
   }, [length]);
@@ -64,6 +65,7 @@ function AxisCrosshair({ startPoint, length, onHover, onClick, onError }: AxisCr
             </mesh>
             <mesh 
               onPointerMove={(e) => { e.stopPropagation(); onHover(target); }}
+              onPointerDown={onPointerDown}
               onClick={(e) => { 
                 e.stopPropagation(); 
                 // Don't just click silently, let's let the parent validate collision.
@@ -117,6 +119,20 @@ export default function Stage() {
   const [currentPoint, setCurrentPoint] = useState<[number, number, number] | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const pointerDownPos = useRef<{ x: number, y: number } | null>(null);
+
+  const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    pointerDownPos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const isActuallyClick = (e: ThreeEvent<MouseEvent>) => {
+    if (!pointerDownPos.current) return true;
+    const dx = e.clientX - pointerDownPos.current.x;
+    const dy = e.clientY - pointerDownPos.current.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    return dist < 3;
+  };
+
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -194,6 +210,7 @@ export default function Stage() {
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
+    if (!isActuallyClick(e)) return;
     
     if (selectedEdgeId) {
       setSelectedEdgeId(null);
@@ -205,15 +222,8 @@ export default function Stage() {
       if (isStartHoverError) return;
       setStartPoint(currentPoint);
     } else if (startPoint && currentPoint) {
-      if (startPoint[0] === currentPoint[0] && startPoint[1] === currentPoint[1] && startPoint[2] === currentPoint[2]) return;
-      if (isSegmentError) {
-        showToast('连线路径上存在遮挡碰撞，无法接上！');
-        return;
-      }
-      
-      if (handleTryPlacePipe(startPoint, currentPoint, getTargetLength())) {
-        setStartPoint(currentPoint);
-      }
+      // 当已经有起点时，地面的点击不再触发新增管子，必须点击在引导线（AxisCrosshair）上
+      return;
     }
   };
   
@@ -347,6 +357,7 @@ export default function Stage() {
           rotation={[-Math.PI / 2, 0, 0]} 
           position={[0, -25, 0]} 
           onPointerMove={handlePointerMove}
+          onPointerDown={handlePointerDown}
           onClick={handleClick}
           onContextMenu={handleContextMenu}
           visible={false}
@@ -357,9 +368,11 @@ export default function Stage() {
         
         <InstancedConnectors 
           nodes={nodes}
+          onPointerDown={handlePointerDown}
           onNodeClick={(nodeId, e) => {
             if (selectedTool === 'NONE') return;
             e.stopPropagation();
+            if (!isActuallyClick(e)) return;
             if (!startPoint) {
               setStartPoint(nodes[nodeId].position);
               setSelectedEdgeId(null);
@@ -397,8 +410,10 @@ export default function Stage() {
           edges={edges}
           nodes={nodes}
           selectedEdgeId={selectedEdgeId}
+          onPointerDown={handlePointerDown}
           onPipeClick={(edgeId, e) => {
             e.stopPropagation();
+            if (!isActuallyClick(e)) return;
             setSelectedEdgeId(edgeId);
             setStartPoint(null);
           }}
@@ -420,6 +435,9 @@ export default function Stage() {
             length={getTargetLength() * 50} 
             onHover={(target: [number, number, number]) => setCurrentPoint(target)}
             onClick={(target: [number, number, number]) => {
+              // Note: AxisCrosshair handles its own internal structure, 
+              // but we pass down the drag validation logic indirectly if needed.
+              // For now, grid/node clicks are the main concern.
               if (isSegmentColliding(startPoint, target, edges, nodes)) {
                 showToast('连线路径上存在遮挡碰撞，无法接上！');
                 return;
@@ -429,6 +447,7 @@ export default function Stage() {
               }
             }}
             onError={showToast}
+            onPointerDown={handlePointerDown}
           />
         )}
         
@@ -450,6 +469,7 @@ export default function Stage() {
                 }
               }}
               onError={showToast}
+              onPointerDown={handlePointerDown}
             />
             <AxisCrosshair 
               startPoint={edgeEndNode.position} 
@@ -467,6 +487,7 @@ export default function Stage() {
                 }
               }}
               onError={showToast}
+              onPointerDown={handlePointerDown}
             />
           </group>
         )}

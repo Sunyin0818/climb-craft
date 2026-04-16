@@ -7,6 +7,7 @@ import { ThreeEvent } from '@react-three/fiber';
 interface InstancedConnectorsProps {
   nodes: Record<string, any>;
   onNodeClick: (nodeId: string, e: ThreeEvent<MouseEvent>) => void;
+  onPointerDown?: (e: ThreeEvent<PointerEvent>) => void;
 }
 
 const UNIT_SPHERE = new THREE.SphereGeometry(25, 32, 32);
@@ -16,7 +17,7 @@ const TEMP_QUATERNION = new THREE.Quaternion(); // Identity
 const TEMP_SCALE = new THREE.Vector3();
 const TEMP_COLOR = new THREE.Color();
 
-export default function InstancedConnectors({ nodes, onNodeClick }: InstancedConnectorsProps) {
+export default function InstancedConnectors({ nodes, onNodeClick, onPointerDown }: InstancedConnectorsProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   
@@ -84,6 +85,7 @@ export default function InstancedConnectors({ nodes, onNodeClick }: InstancedCon
       args={[UNIT_SPHERE, undefined, 20000]} // Max capacity 20,000 nodes
       onPointerMove={handlePointerMove}
       onPointerOut={handlePointerOut}
+      onPointerDown={onPointerDown}
       onClick={handleClick}
       frustumCulled={false}
     >
