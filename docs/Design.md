@@ -19,6 +19,8 @@
 ### 2.2 坐标系统
 * **整数网格：** 所有零件的坐标点 $(x, y, z)$ 必须为 $LU$ 的整数倍。
 * **对齐约束：** 仅支持 90° 旋转（初始版本），确保所有管子与连接件处于标准笛卡尔坐标系平面内。
+* **物理防呆：** 系统会自动拦截不在轴线上、长度不匹配、或存在物理碰撞的连线操作，并触发实时 UI 提示。
+
 
 ---
 
@@ -34,22 +36,39 @@
 
 ---
 
+## 4. 视觉与交互设计
+
+### 4.1 四色防重系统
+为了增加辨识度并辅助物理搭建，管子在拼接时会自动分配颜色：
+* **色彩池：** 红 (`#ef4444`)、黄 (`#eab308`)、蓝 (`#3b82f6`)、绿 (`#22c55e`)。
+* **分配逻辑：** 优先选取与相连管子不冲突的颜色。如遇极端复杂节点（连接数 > 4），则随机抽取。
+
+### 4.2 UI/UX 优化
+* **防干扰交互：**
+    * 旋转视角（Orbit）时自动屏蔽点击判定，位移阈值设为 3 像素。
+    * 起点锁定：已设定起点后，地平面的任意点击被忽略，必须点击“十字引导轴”或“连接节点”方可完成闭环。
+* **反馈系统：** 采用轻量化 Toast 浮层，实时反馈连接失败的具体原因（如：错层、跨度不均、碰撞）。
+
+
+---
+
 ## 4. 工程目录结构
 ```text
 climb-craft/
 ├── src/
 │   ├── core/                # 【逻辑层】纯 TS 编写，不依赖 UI
 │   │   ├── utils/           # CoordinateUtils.ts (坐标转换)
-│   │   ├── engine/          # Snapping.ts (吸附逻辑), Collision.ts (碰撞)
+│   │   ├── engine/          # Snapping.ts (吸附逻辑), CollisionUtils.ts (碰撞)
 │   │   └── constants.ts     # 零件元数据、LU 尺寸定义
 │   ├── store/               # 【状态层】Zustand Stores
 │   │   └── useSceneStore.ts # 核心场景树（Nodes: 连接件, Edges: 管子）
 │   ├── components/          # 【视图层】React 组件
-│   │   ├── canvas/          # 3D 渲染组件 (Stage, Pipe, Connector)
+│   │   ├── canvas/          # 3D 渲染组件 (Stage, Pipe, Connector, Instanced*)
 │   │   └── ui/              # 2D 面板 (Sidebar, Inventory, PriceTag)
 │   └── db/                  # 【持久化】Dexie 配置
 │       └── schema.ts
 ```
+
 
 ## 5. 核心逻辑伪代码
 
@@ -78,26 +97,28 @@ interface SceneState {
   edges: Record<string, EdgeInstance>; // 管子数据
   
   // 动作：添加零件
-  addPart: (type: 'PIPE' | 'CONN', position: [number, number, number]) => void;
-  // 动作：实时物料统计
-  getBOM: () => Array<{ name: string, count: number, price: number }>;
+  placePipe: (start: [number, number, number], end: [number, number, number], length: number) => void;
+  // 动作：重置/删除
+  removePipe: (edgeId: string) => void;
 }
 ```
 
 ## 6. 核心功能 Roadmap
 
 ### Phase 1: 核心引擎 (MVP)
-- [ ] 基础 3D 舞台与网格参考线。
-- [ ] 50mm 整数倍强制吸附逻辑。
-- [ ] 管子与连接件的“影子预览”放置功能。
+- [x] 基础 3D 舞台与网格参考线。
+- [x] 50mm 整数倍强制吸附逻辑。
+- [x] 管子与连接件的“影子预览”放置功能。
+- [x] 物料防呆校验与 Toast 提示。
 
 ### Phase 2: 物料与管理
+- [x] 基于 InstancedMesh 的超大型场景渲染优化。
+- [x] 管子自动避重上色系统。
 - [ ] 侧边栏零件库（拖拽或点击放置）。
 - [ ] 实时价格面板（根据当前设计稿自动计算总价）。
-- [ ] 本地设计稿保存与重载  。
+- [ ] 本地设计稿保存与重载。
 
 ### Phase 3: 体验与导出
-- [ ] 自动补全功能（在两个连接件间点击自动生成管子）。
+- [x] 自动补全功能（在点击已有连接件或引导轴时自动生成管子）。
 - [ ] 生成 PDF 规格说明书与清单。
 - [ ] 导出 GLB 模型（用于在其他 3D 软件渲染）。
-
