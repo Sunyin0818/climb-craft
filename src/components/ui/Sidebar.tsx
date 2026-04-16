@@ -3,19 +3,56 @@
 import { useLocaleStore } from '@/store/useLocaleStore';
 import { useSceneStore } from '@/store/useSceneStore';
 import clsx from 'clsx';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import InventorySettings from './InventorySettings';
 
 export default function Sidebar() {
   const t = useLocaleStore((state) => state.t);
   const selectedTool = useSceneStore((state) => state.selectedTool);
   const setSelectedTool = useSceneStore((state) => state.setSelectedTool);
+  const nodes = useSceneStore((state) => state.nodes);
   const [showSettings, setShowSettings] = useState(false);
+
+  const { width, depth, height } = useMemo(() => {
+    const nodeValues = Object.values(nodes);
+    if (nodeValues.length === 0) return { width: 0, depth: 0, height: 0 };
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    for (const node of nodeValues) {
+      if (node.position[0] < minX) minX = node.position[0];
+      if (node.position[0] > maxX) maxX = node.position[0];
+      if (node.position[1] < minY) minY = node.position[1];
+      if (node.position[1] > maxY) maxY = node.position[1];
+      if (node.position[2] < minZ) minZ = node.position[2];
+      if (node.position[2] > maxZ) maxZ = node.position[2];
+    }
+    return {
+      width: (maxX - minX) + 50,
+      depth: (maxZ - minZ) + 50,
+      height: (maxY - minY) + 50
+    };
+  }, [nodes]);
 
   return (
     <div className="absolute top-0 left-0 h-full w-80 bg-white/10 backdrop-blur-md border-r border-white/20 p-6 flex flex-col gap-6 text-white z-10 shadow-2xl">
       <div className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-indigo-400 to-cyan-300">
         {t.app.title}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 -mt-2 mb-2">
+        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col">
+          <span className="text-[10px] text-white/40 uppercase tracking-wider mb-1">占地面积 (L×W)</span>
+          <span className="text-sm font-bold text-cyan-50">
+            {Object.keys(nodes).length > 0 ? `${(width/10).toFixed(0)} × ${(depth/10).toFixed(0)} cm` : '0 × 0 cm'}
+          </span>
+        </div>
+        <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col">
+          <span className="text-[10px] text-white/40 uppercase tracking-wider mb-1">最大高度 (H)</span>
+          <span className="text-sm font-bold text-cyan-50">
+            {Object.keys(nodes).length > 0 ? `${(height/10).toFixed(0)} cm` : '0 cm'}
+          </span>
+        </div>
       </div>
       
       <div className="flex-1 overflow-y-auto space-y-4">
