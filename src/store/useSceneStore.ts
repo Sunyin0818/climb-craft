@@ -18,6 +18,7 @@ export interface EdgeInstance {
   end: string;
   type: 'PIPE';
   length: number; // 实际需要的连杆长度（例如 350mm / 150mm 等）
+  color?: string; // 拼接时选用的颜色
 }
 
 interface SceneState {
@@ -97,9 +98,20 @@ export const useSceneStore = create<SceneState>((set) => ({
     if (!newNodes[startId]) newNodes[startId] = { id: startId, position: start, type: 'CONN', shape: 'UNKNOWN' };
     if (!newNodes[endId]) newNodes[endId] = { id: endId, position: end, type: 'CONN', shape: 'UNKNOWN' };
     
+    // 获取相连管子的颜色，避免重复
+    const connectedEdges = Object.values(state.edges).filter(e => 
+      e.start === startId || e.end === startId || e.start === endId || e.end === endId
+    );
+    const usedColors = new Set(connectedEdges.map(e => e.color).filter(Boolean));
+    const availableColors = ['#ef4444', '#eab308', '#3b82f6', '#22c55e']; // 红、黄、蓝、绿
+    let chosenColor = availableColors.find(c => !usedColors.has(c));
+    if (!chosenColor) {
+      chosenColor = availableColors[Math.floor(Math.random() * availableColors.length)];
+    }
+
     const newEdges: Record<string, EdgeInstance> = {
       ...state.edges,
-      [edgeId]: { id: edgeId, start: startId, end: endId, type: 'PIPE', length }
+      [edgeId]: { id: edgeId, start: startId, end: endId, type: 'PIPE', length, color: chosenColor }
     };
     
     return {

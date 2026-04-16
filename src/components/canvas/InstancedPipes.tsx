@@ -78,10 +78,13 @@ export default function InstancedPipes({ edges, nodes, selectedEdgeId, onPipeCli
       const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const logicSpan = Math.round(distance / 50);
 
-      let baseColor = "#eeeeee";
-      if (logicSpan === 8) baseColor = "#ef4444";
-      else if (logicSpan === 6) baseColor = "#10b981";
-      else if (logicSpan === 4) baseColor = "#f59e0b";
+      let baseColor = edge.color;
+      if (!baseColor) {
+        baseColor = "#eeeeee";
+        if (logicSpan === 8) baseColor = "#ef4444";
+        else if (logicSpan === 6) baseColor = "#10b981";
+        else if (logicSpan === 4) baseColor = "#f59e0b";
+      }
 
       TEMP_COLOR.set(baseColor);
       
