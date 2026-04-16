@@ -10,14 +10,19 @@ import { Snapping } from '@/core/engine/Snapping';
 import { CoordinateUtils } from '@/core/utils/CoordinateUtils';
 import { isPointOnEdgeBody, isSegmentColliding } from '@/core/engine/CollisionUtils';
 import Pipe from './Pipe';
+import InstancedPipes from './InstancedPipes';
 import Connector from './Connector';
+import InstancedConnectors from './InstancedConnectors';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 const AXES = [
-  [0, 1, 0], [0, -1, 0],
-  [1, 0, 0], [-1, 0, 0],
-  [0, 0, 1], [0, 0, -1]
+  new Vector3(0, 1, 0), new Vector3(0, -1, 0),
+  new Vector3(1, 0, 0), new Vector3(-1, 0, 0),
+  new Vector3(0, 0, 1), new Vector3(0, 0, -1)
 ];
+
+const DEFAULT_UP = new Vector3(0, 1, 0);
+
 
 interface AxisCrosshairProps {
   startPoint: [number, number, number];
@@ -27,23 +32,30 @@ interface AxisCrosshairProps {
 }
 
 function AxisCrosshair({ startPoint, length, onHover, onClick }: AxisCrosshairProps) {
+  const midPoints = useMemo(() => {
+    return AXES.map(v => new Vector3().copy(v).multiplyScalar(length / 2));
+  }, [length]);
+
+  const quaternions = useMemo(() => {
+    return AXES.map(v => new Quaternion().setFromUnitVectors(DEFAULT_UP, v));
+  }, []);
+
   if (!startPoint || length <= 0) return null;
+  
   return (
     <group position={startPoint}>
       {AXES.map((v, i) => {
         const target: [number, number, number] = [
-          startPoint[0] + v[0] * length,
-          startPoint[1] + v[1] * length,
-          startPoint[2] + v[2] * length,
+          startPoint[0] + v.x * length,
+          startPoint[1] + v.y * length,
+          startPoint[2] + v.z * length,
         ];
         
-        const midPoint: [number, number, number] = [v[0] * length / 2, v[1] * length / 2, v[2] * length / 2];
-        const quaternion = new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), new Vector3(...v));
         return (
           <group 
             key={i} 
-            position={midPoint} 
-            quaternion={quaternion}
+            position={midPoints[i]} 
+            quaternion={quaternions[i]}
           >
             <mesh>
               <cylinderGeometry args={[2, 2, length, 8]} />
@@ -63,21 +75,32 @@ function AxisCrosshair({ startPoint, length, onHover, onClick }: AxisCrosshairPr
   );
 }
 
+
+let cachedWebGLSupport: boolean | null = null;
 const checkWebGLSupport = () => {
+  if (cachedWebGLSupport !== null) return cachedWebGLSupport;
   if (typeof window === 'undefined') return true;
   try {
     const canvas = document.createElement('canvas');
-    return !!(
-      window.WebGLRenderingContext && 
-      (canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
-    );
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    const support = !!(window.WebGLRenderingContext && gl);
+    // 强制丢弃临时上下文
+    if (gl) {
+      const loseContext = gl.getExtension('WEBGL_lose_context');
+      if (loseContext) loseContext.loseContext();
+    }
+    cachedWebGLSupport = support;
+    return support;
   } catch (e) {
+    cachedWebGLSupport = false;
     return false;
   }
 };
 
+
 export default function Stage() {
   const [hasWebGL] = useState(checkWebGLSupport);
+  const [contextLost, setContextLost] = useState(false);
   const selectedTool = useSceneStore(s => s.selectedTool);
   const placePipe = useSceneStore(s => s.placePipe);
   const removePipe = useSceneStore(s => s.removePipe);
@@ -88,6 +111,7 @@ export default function Stage() {
   const [startPoint, setStartPoint] = useState<[number, number, number] | null>(null);
   const [currentPoint, setCurrentPoint] = useState<[number, number, number] | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+
   
   const orbitRef = useRef<OrbitControlsImpl>(null);
 
@@ -194,19 +218,30 @@ export default function Stage() {
   const edgeStartNode = selectedEdge ? nodes[selectedEdge.start] : null;
   const edgeEndNode = selectedEdge ? nodes[selectedEdge.end] : null;
 
-  if (!hasWebGL) {
+  if (!hasWebGL || contextLost) {
     return (
       <div className="w-full h-full bg-neutral-900 border-none flex flex-col items-center justify-center p-8 m-0 text-white font-sans">
         <svg className="w-20 h-20 text-red-500 mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
         </svg>
-        <h2 className="text-2xl font-bold mb-4 tracking-wider">3D 引擎启动失败</h2>
+        <h2 className="text-2xl font-bold mb-4 tracking-wider">{contextLost ? 'WebGL 上下文丢失' : '3D 引擎启动失败'}</h2>
         <p className="text-white/70 max-w-lg text-center leading-relaxed mb-6">
-          您的浏览器设备未能创建 WebGL 渲染上下文。
+          {contextLost 
+            ? '由于 GPU 资源不足或 RDP 连接环境变化，3D 视图已断开。' 
+            : '您的浏览器设备未能创建 WebGL 渲染上下文。'}
         </p>
+        {contextLost && (
+          <button 
+            onClick={() => window.location.reload()}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white px-8 py-3 rounded-full transition-all font-bold"
+          >
+            刷新以恢复 (Reload)
+          </button>
+        )}
       </div>
     );
   }
+
 
   return (
     <div className="w-full h-full bg-neutral-900 border-none outline-none overflow-hidden m-0 p-0" onContextMenu={(e) => e.preventDefault()}>
@@ -238,7 +273,25 @@ export default function Stage() {
         </div>
       )}
 
-      <Canvas camera={{ position: [4000, 2500, 5000], fov: 45, near: 50, far: 30000 }}>
+      <Canvas 
+        camera={{ position: [4000, 2500, 5000], fov: 45, near: 50, far: 30000 }}
+        gl={{ powerPreference: 'high-performance', antialias: true, stencil: false, alpha: false }}
+        onCreated={({ gl }) => {
+          const canvas = gl.domElement;
+          const handleContextLost = (e: Event) => {
+            e.preventDefault();
+            console.warn("WebGL Context Lost!");
+            setContextLost(true);
+          };
+          const handleContextRestored = () => {
+             console.log("WebGL Context Restored");
+             setContextLost(false);
+          };
+          canvas.addEventListener('webglcontextlost', handleContextLost, false);
+          canvas.addEventListener('webglcontextrestored', handleContextRestored, false);
+        }}
+      >
+
         <ambientLight intensity={0.5} />
         <directionalLight position={[10, 10, 5]} intensity={1} />
         
@@ -277,38 +330,26 @@ export default function Stage() {
           <meshBasicMaterial />
         </mesh>
         
-        {Object.values(nodes).map(node => (
-          <Connector 
-            key={node.id} 
-            position={node.position} 
-            isPreview={false}
-            onClick={(e) => {
-              if (selectedTool !== 'NONE' && !startPoint) {
-                e.stopPropagation();
-                setStartPoint(node.position);
-                setSelectedEdgeId(null);
-              }
-            }}
-          />
-        ))}
-        {Object.values(edges).map(edge => {
-          const startPos = nodes[edge.start]?.position || [0,0,0];
-          const endPos = nodes[edge.end]?.position || [0,0,0];
-          return (
-            <Pipe 
-              key={edge.id} 
-              start={startPos} 
-              end={endPos} 
-              isPreview={false}
-              isSelected={selectedEdgeId === edge.id}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedEdgeId(edge.id);
-                setStartPoint(null);
-              }}
-            />
-          );
-        })}
+        <InstancedConnectors 
+          nodes={nodes}
+          onNodeClick={(nodeId, e) => {
+            if (selectedTool !== 'NONE' && !startPoint) {
+              e.stopPropagation();
+              setStartPoint(nodes[nodeId].position);
+              setSelectedEdgeId(null);
+            }
+          }}
+        />
+        <InstancedPipes
+          edges={edges}
+          nodes={nodes}
+          selectedEdgeId={selectedEdgeId}
+          onPipeClick={(edgeId, e) => {
+            e.stopPropagation();
+            setSelectedEdgeId(edgeId);
+            setStartPoint(null);
+          }}
+        />
         {selectedTool !== 'NONE' && currentPoint && !startPoint && (
           <Connector position={currentPoint} isPreview isError={isStartHoverError} />
         )}

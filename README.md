@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# climb-craft
 
-## Getting Started
+**climb-craft** 是一款专为儿童室内攀爬架（基于 Quadro 兼容系统）设计的 3D 建模与物料管理工具。它通过严谨的几何网格逻辑（LU），帮助用户快速生成安全、合规的设计方案及采购清单。
 
-First, run the development server:
+---
+
+## 🛠 开发环境初始化 (Environment Setup)
+
+本项目依赖 Node.js 和 npm。
+
+### 1. 安装依赖
+在项目根目录下运行：
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. 启动开发服务器
+```bash
+npm run dev
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+启动后，访问 [http://localhost:3000](http://localhost:3000) 查看实时预览。
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 📐 核心物理与几何规范
 
-To learn more about Next.js, take a look at the following resources:
+*   **1 LU (Logical Unit) = 50mm**。
+*   **350mm 管子** = 8 LU (400mm 中心距)。
+*   **150mm 管子** = 4 LU (200mm 中心距)。
+*   **坐标约束**：所有零件坐标必须为 LU 的整数倍，仅支持 90° 旋转。
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🚀 技术栈 (Technical Stack)
 
-## Deploy on Vercel
+*   **框架**：Next.js 15+ (App Router)
+*   **3D 渲染**：React Three Fiber (R3F)
+*   **状态管理**：Zustand
+*   **碰撞检测**：Three-mesh-bvh
+*   **UI 组件**：shadcn/ui + Tailwind CSS
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📄 参考文档
+*   [Design.md](./Design.md) - 详细设计文档与路线图。
+*   [AGENTS.md](./AGENTS.md) - AI 代理协作准则（包含 Next.js 版本的特殊说明）。
