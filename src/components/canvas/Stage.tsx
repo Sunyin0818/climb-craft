@@ -29,9 +29,10 @@ interface AxisCrosshairProps {
   length: number;
   onHover: (target: [number, number, number]) => void;
   onClick: (target: [number, number, number]) => void;
+  onError: (msg: string) => void;
 }
 
-function AxisCrosshair({ startPoint, length, onHover, onClick }: AxisCrosshairProps) {
+function AxisCrosshair({ startPoint, length, onHover, onClick, onError }: AxisCrosshairProps) {
   const midPoints = useMemo(() => {
     return AXES.map(v => new Vector3().copy(v).multiplyScalar(length / 2));
   }, [length]);
@@ -63,9 +64,13 @@ function AxisCrosshair({ startPoint, length, onHover, onClick }: AxisCrosshairPr
             </mesh>
             <mesh 
               onPointerMove={(e) => { e.stopPropagation(); onHover(target); }}
-              onClick={(e) => { e.stopPropagation(); onClick(target); }}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                // Don't just click silently, let's let the parent validate collision.
+                onClick(target); 
+              }}
             >
-              <cylinderGeometry args={[100, 100, length, 8]} />
+              <cylinderGeometry args={[40, 40, length, 8]} />
               <meshBasicMaterial transparent opacity={0} depthWrite={false} />
             </mesh>
           </group>
@@ -111,6 +116,13 @@ export default function Stage() {
   const [startPoint, setStartPoint] = useState<[number, number, number] | null>(null);
   const [currentPoint, setCurrentPoint] = useState<[number, number, number] | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
 
   
   const orbitRef = useRef<OrbitControlsImpl>(null);
@@ -194,7 +206,10 @@ export default function Stage() {
       setStartPoint(currentPoint);
     } else if (startPoint && currentPoint) {
       if (startPoint[0] === currentPoint[0] && startPoint[1] === currentPoint[1] && startPoint[2] === currentPoint[2]) return;
-      if (isSegmentError) return;
+      if (isSegmentError) {
+        showToast('连线路径上存在遮挡碰撞，无法接上！');
+        return;
+      }
       
       if (handleTryPlacePipe(startPoint, currentPoint, getTargetLength())) {
         setStartPoint(currentPoint);
@@ -255,6 +270,16 @@ export default function Stage() {
         </button>
       </div>
 
+      {toastMsg && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="bg-red-500/90 text-white px-6 py-3 rounded-full shadow-2xl backdrop-blur-md border border-red-400 font-medium flex items-center gap-3">
+            <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            {toastMsg}
+          </div>
+        </div>
+      )}
 
       {selectedEdgeId && (
         <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-4">
@@ -333,10 +358,38 @@ export default function Stage() {
         <InstancedConnectors 
           nodes={nodes}
           onNodeClick={(nodeId, e) => {
-            if (selectedTool !== 'NONE' && !startPoint) {
-              e.stopPropagation();
+            if (selectedTool === 'NONE') return;
+            e.stopPropagation();
+            if (!startPoint) {
               setStartPoint(nodes[nodeId].position);
               setSelectedEdgeId(null);
+            } else {
+              const target = nodes[nodeId].position;
+              // Check exact target point logic
+              const dx = Math.abs(target[0] - startPoint[0]);
+              const dy = Math.abs(target[1] - startPoint[1]);
+              const dz = Math.abs(target[2] - startPoint[2]);
+              
+              const nonZeroDiffs = [dx, dy, dz].filter(d => d > 0.01).length;
+              const actualDistance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+              const targetLen = getTargetLength() * 50;
+
+              if (nonZeroDiffs > 1) {
+                if (dy > 0.01) showToast('不在同一个水平面或未精确对齐，无法接上！');
+                else showToast('未在同一条轴线上，无法接上！');
+                return;
+              }
+              if (Math.abs(actualDistance - targetLen) > 0.1) {
+                showToast(`管子长度不匹配（当前管子跨度为 ${getTargetLength()}，但目标距离跨度为 ${Math.round(actualDistance / 50)}），无法接上！`);
+                return;
+              }
+              if (isSegmentColliding(startPoint, target, edges, nodes)) {
+                showToast('连线路径上存在遮挡碰撞，无法接上！');
+                return;
+              }
+              if (handleTryPlacePipe(startPoint, target, getTargetLength())) {
+                setStartPoint(target);
+              }
             }
           }}
         />
@@ -367,11 +420,15 @@ export default function Stage() {
             length={getTargetLength() * 50} 
             onHover={(target: [number, number, number]) => setCurrentPoint(target)}
             onClick={(target: [number, number, number]) => {
-              if (isSegmentColliding(startPoint, target, edges, nodes)) return;
+              if (isSegmentColliding(startPoint, target, edges, nodes)) {
+                showToast('连线路径上存在遮挡碰撞，无法接上！');
+                return;
+              }
               if (handleTryPlacePipe(startPoint, target, getTargetLength())) {
                 setStartPoint(target);
               }
             }}
+            onError={showToast}
           />
         )}
         
@@ -383,12 +440,16 @@ export default function Stage() {
               onHover={(target) => getTargetLength() > 0 && setCurrentPoint(target)}
               onClick={(target) => {
                 if (getTargetLength() === 0) return;
-                if (isSegmentColliding(edgeStartNode.position, target, edges, nodes)) return;
+                if (isSegmentColliding(edgeStartNode.position, target, edges, nodes)) {
+                  showToast('连线路径上存在遮挡碰撞，无法接上！');
+                  return;
+                }
                 if (handleTryPlacePipe(edgeStartNode.position, target, getTargetLength())) {
                   setSelectedEdgeId(null);
                   setStartPoint(target);
                 }
               }}
+              onError={showToast}
             />
             <AxisCrosshair 
               startPoint={edgeEndNode.position} 
@@ -396,12 +457,16 @@ export default function Stage() {
               onHover={(target) => getTargetLength() > 0 && setCurrentPoint(target)}
               onClick={(target) => {
                 if (getTargetLength() === 0) return;
-                if (isSegmentColliding(edgeEndNode.position, target, edges, nodes)) return;
+                if (isSegmentColliding(edgeEndNode.position, target, edges, nodes)) {
+                  showToast('连线路径上存在遮挡碰撞，无法接上！');
+                  return;
+                }
                 if (handleTryPlacePipe(edgeEndNode.position, target, getTargetLength())) {
                   setSelectedEdgeId(null);
                   setStartPoint(target);
                 }
               }}
+              onError={showToast}
             />
           </group>
         )}
