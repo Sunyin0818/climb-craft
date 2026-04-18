@@ -7,6 +7,7 @@ import { useInventoryStore, computeUsedCounts, PartType } from '@/store/useInven
 export default function Inventory() {
   const nodes = useSceneStore((state) => state.nodes);
   const edges = useSceneStore((state) => state.edges);
+  const panels = useSceneStore((state) => state.panels);
   const t = useLocaleStore((state) => state.t);
   const { stock, price } = useInventoryStore();
 
@@ -19,6 +20,12 @@ export default function Inventory() {
   const pipeCounts: Record<number, number> = {};
   Object.values(edges).forEach(edge => {
     pipeCounts[edge.length] = (pipeCounts[edge.length] || 0) + 1;
+  });
+ 
+  const pnlCounts: Record<string, number> = {};
+  Object.values(panels).forEach(panel => {
+    const pnlType = `PANEL_${panel.size[0]}x${panel.size[1]}`;
+    pnlCounts[pnlType] = (pnlCounts[pnlType] || 0) + 1;
   });
 
   const getPipeName = (len: number) => {
@@ -58,6 +65,21 @@ export default function Inventory() {
     const excess = Math.max(0, count - available);
 
     const name = t.inventory.connectors[shape as ConnectorShape] || shape;
+    if (usedStock > 0) stockBom.push({ name, count: usedStock });
+    if (excess > 0) excessBom.push({ name, count: excess, price: unitPrice, totalLinePrice: excess * unitPrice });
+  });
+ 
+  // 计算面板
+  Object.entries(pnlCounts).forEach(([pType, count]) => {
+    const available = stock[pType as PartType] || 0;
+    const unitPrice = price[pType as PartType] || 0;
+ 
+    const usedStock = Math.min(count, available);
+    const excess = Math.max(0, count - available);
+ 
+    const isLarge = pType.includes('8x8');
+    const name = isLarge ? t.sidebar.panelLarge.name : t.sidebar.panelSmall.name;
+ 
     if (usedStock > 0) stockBom.push({ name, count: usedStock });
     if (excess > 0) excessBom.push({ name, count: excess, price: unitPrice, totalLinePrice: excess * unitPrice });
   });

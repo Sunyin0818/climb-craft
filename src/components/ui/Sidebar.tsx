@@ -90,6 +90,28 @@ export default function Sidebar() {
           <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{t.sidebar.pipeShort.name}</div>
           <div className="text-xs text-white/40">{t.sidebar.pipeShort.desc}</div>
         </div>
+ 
+        <div className="h-px bg-white/5 my-2" />
+ 
+        <div 
+          onClick={() => setSelectedTool('PANEL_LARGE')}
+          className={clsx("p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group", 
+            selectedTool === 'PANEL_LARGE' ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
+          )}
+        >
+          <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{t.sidebar.panelLarge.name}</div>
+          <div className="text-xs text-white/40">{t.sidebar.panelLarge.desc}</div>
+        </div>
+ 
+        <div 
+          onClick={() => setSelectedTool('PANEL_SMALL')}
+          className={clsx("p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group", 
+            selectedTool === 'PANEL_SMALL' ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
+          )}
+        >
+          <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{t.sidebar.panelSmall.name}</div>
+          <div className="text-xs text-white/40">{t.sidebar.panelSmall.desc}</div>
+        </div>
       </div>
       <div className="flex flex-col gap-2 mt-auto">
         <button 

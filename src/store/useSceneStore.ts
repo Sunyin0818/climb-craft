@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { CoordinateUtils } from '@/core/utils/CoordinateUtils';
 
 export type ConnectorShape = '3WAY' | '4WAY' | '5WAY' | '6WAY' | 'L' | 'T' | 'STRAIGHT' | 'UNKNOWN';
-export type SelectedTool = 'NONE' | 'PIPE_LONG' | 'PIPE_MEDIUM' | 'PIPE_SHORT';
+export type SelectedTool = 'NONE' | 'PIPE_LONG' | 'PIPE_MEDIUM' | 'PIPE_SHORT' | 'PANEL_LARGE' | 'PANEL_SMALL';
 
 
 export interface NodeInstance {
@@ -20,10 +20,19 @@ export interface EdgeInstance {
   length: number; // 实际需要的连杆长度（例如 350mm / 150mm 等）
   color?: string; // 拼接时选用的颜色
 }
+ 
+export interface PanelInstance {
+  id: string; // 坐标与轴向标识
+  position: [number, number, number]; // 最小逻辑坐标 [minX, minY, minZ]
+  size: [number, number]; // [8, 8] 或 [8, 4]
+  axis: 'x' | 'y' | 'z'; // 法线轴：x意味着是在 YZ 平面，y意味着是在 XZ 平面，z意味着是在 XY 平面
+  color: string;
+}
 
 interface SceneState {
   nodes: Record<string, NodeInstance>;
   edges: Record<string, EdgeInstance>;
+  panels: Record<string, PanelInstance>;
   
   selectedTool: SelectedTool;
   setSelectedTool: (tool: SelectedTool) => void;
@@ -31,7 +40,10 @@ interface SceneState {
   placePipe: (start: [number, number, number], end: [number, number, number], length: number) => void;
   removePipe: (edgeId: string) => void;
   
-  loadScene: (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>) => void;
+  placePanel: (position: [number, number, number], size: [number, number], axis: 'x' | 'y' | 'z') => void;
+  removePanel: (panelId: string) => void;
+  
+  loadScene: (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>, panels?: Record<string, PanelInstance>) => void;
   clearScene: () => void;
 }
 
@@ -85,6 +97,7 @@ export const recalculateNodeShapes = (nodes: Record<string, NodeInstance>, edges
 export const useSceneStore = create<SceneState>((set) => ({
   nodes: {},
   edges: {},
+  panels: {},
   selectedTool: 'NONE',
   
   setSelectedTool: (tool) => set({ selectedTool: tool }),
@@ -122,7 +135,28 @@ export const useSceneStore = create<SceneState>((set) => ({
       edges: newEdges
     };
   }),
-  
+ 
+  placePanel: (position, size, axis) => set((state) => {
+    const panelId = `panel--${position.join(',')}-${axis}-${size.join(',')}`;
+    if (state.panels[panelId]) return state;
+ 
+    const availableColors = ['#ef4444', '#eab308', '#3b82f6', '#22c55e'];
+    const chosenColor = availableColors[Math.floor(Math.random() * availableColors.length)];
+ 
+    return {
+      panels: {
+        ...state.panels,
+        [panelId]: { id: panelId, position, size, axis, color: chosenColor }
+      }
+    };
+  }),
+ 
+  removePanel: (panelId) => set((state) => {
+    const newPanels = { ...state.panels };
+    delete newPanels[panelId];
+    return { panels: newPanels };
+  }),
+ 
   removePipe: (edgeId) => set((state) => {
     if (!state.edges[edgeId]) return state;
 
@@ -146,7 +180,7 @@ export const useSceneStore = create<SceneState>((set) => ({
     };
   }),
 
-  loadScene: (nodes, edges) => set({ nodes, edges }),
+  loadScene: (nodes, edges, panels) => set({ nodes, edges, panels: panels || {} }),
   
-  clearScene: () => set({ nodes: {}, edges: {}, selectedTool: 'NONE' })
+  clearScene: () => set({ nodes: {}, edges: {}, panels: {}, selectedTool: 'NONE' })
 }));

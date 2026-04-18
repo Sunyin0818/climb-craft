@@ -17,11 +17,20 @@ export const dict = {
       pipeShort: {
         name: 'Pipe (150mm)',
         desc: 'Short tube, 4 LU span'
+      },
+      panelLarge: {
+        name: 'Panel (400x400)',
+        desc: 'Large board, 8x8 LU'
+      },
+      panelSmall: {
+        name: 'Panel (400x200)',
+        desc: 'Small board, 8x4 LU'
       }
     },
     inventory: {
       title: 'Bill of Materials',
       pipe: 'Pipe',
+      panel: 'Panel',
       connectors: {
         '3WAY': '3-Way Connector',
         '4WAY': '4-Way Connector',
@@ -57,11 +66,20 @@ export const dict = {
       pipeShort: {
         name: '短管 (150mm)',
         desc: '逻辑跨度 4 LU'
+      },
+      panelLarge: {
+        name: '大面板 (400x400)',
+        desc: '逻辑尺寸 8x8 LU'
+      },
+      panelSmall: {
+        name: '小面板 (400x200)',
+        desc: '逻辑尺寸 8x4 LU'
       }
     },
     inventory: {
       title: '物料清单 (BOM)',
       pipe: '管子',
+      panel: '面板',
       connectors: {
         '3WAY': '三通',
         '4WAY': '四通',

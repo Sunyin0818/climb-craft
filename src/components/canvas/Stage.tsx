@@ -13,6 +13,8 @@ import Pipe from './Pipe';
 import InstancedPipes from './InstancedPipes';
 import Connector from './Connector';
 import InstancedConnectors from './InstancedConnectors';
+import Panel from './Panel';
+import InstancedPanels from './InstancedPanels';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 
 const AXES = [
@@ -113,11 +115,23 @@ export default function Stage() {
   const removePipe = useSceneStore(s => s.removePipe);
   const nodes = useSceneStore(s => s.nodes);
   const edges = useSceneStore(s => s.edges);
+  const panels = useSceneStore(s => s.panels);
+  const placePanel = useSceneStore(s => s.placePanel);
+  const removePanel = useSceneStore(s => s.removePanel);
   const t = useLocaleStore(s => s.t);
 
   const [startPoint, setStartPoint] = useState<[number, number, number] | null>(null);
   const [currentPoint, setCurrentPoint] = useState<[number, number, number] | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
+  
+  // 用于面板预览的状态
+  const [panelPreview, setPanelPreview] = useState<{
+    position: [number, number, number];
+    size: [number, number];
+    axis: 'x' | 'y' | 'z';
+  } | null>(null);
+
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const pointerDownPos = useRef<{ x: number, y: number } | null>(null);
 
@@ -179,6 +193,70 @@ export default function Stage() {
     return 0;
   };
 
+  const getPanelSize = (): [number, number] | null => {
+    if (selectedTool === 'PANEL_LARGE') return [8, 8];
+    if (selectedTool === 'PANEL_SMALL') return [8, 4]; // 动态旋转另计，此处为基础底稿
+    return null;
+  };
+
+  const findValidPanelHole = (point: [number, number, number], size: [number, number]) => {
+    const [W, H] = size;
+    const planes: ('x' | 'y' | 'z')[] = ['x', 'y', 'z'];
+    
+    // 检查三种平面方向
+    for (const axis of planes) {
+      // 在该平面上，围绕当前点检查 4 个可能的象限
+      // 为简化，我们只检查一个以 point 为“左下角”或“附近”的 8x8/8x4 区域
+      // 实际上 350mm 管子跨度是 8 LU。
+      
+      const checkRectangle = (origin: [number, number, number], w: number, h: number, ax: 'x' | 'y' | 'z') => {
+        const boundaryEdges: string[] = [];
+        if (ax === 'y') { // XZ plane
+          boundaryEdges.push(CoordinateUtils.getEdgeKey(origin, [origin[0] + w, origin[1], origin[2]]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0] + w, origin[1], origin[2]], [origin[0] + w, origin[1], origin[2] + h]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0] + w, origin[1], origin[2] + h], [origin[0], origin[1], origin[2] + h]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1], origin[2] + h], origin));
+        } else if (ax === 'x') { // YZ plane
+          boundaryEdges.push(CoordinateUtils.getEdgeKey(origin, [origin[0], origin[1] + w, origin[2]]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1] + w, origin[2]], [origin[0], origin[1] + w, origin[2] + h]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1] + w, origin[2] + h], [origin[0], origin[1], origin[2] + h]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1], origin[2] + h], origin));
+        } else if (ax === 'z') { // XY plane
+          boundaryEdges.push(CoordinateUtils.getEdgeKey(origin, [origin[0] + w, origin[1], origin[2]]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0] + w, origin[1], origin[2]], [origin[0] + w, origin[1] + h, origin[2]]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0] + w, origin[1] + h, origin[2]], [origin[0], origin[1] + h, origin[2]]));
+          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1] + h, origin[2]], origin));
+        }
+        
+        return boundaryEdges.every(key => edges[key]);
+      };
+
+      // 搜索 radius 范围内的网格起点（LU 为单位）
+      const px = Math.floor(point[0] / 4) * 4; // 稍微放宽匹配精度
+      const py = Math.floor(point[1] / 4) * 4;
+      const pz = Math.floor(point[2] / 4) * 4;
+
+      // 尝试多种可能的偏移（针对 8x8 和 8x4/4x8）
+      const sizesToTry: [number, number][] = W === H ? [[W, H]] : [[W, H], [H, W]];
+      
+      for (const [sw, sh] of sizesToTry) {
+        // 检查以当前点周围几个关键节点作为起点的矩形
+        const offsets = [-8, -4, 0];
+        for (const ox of offsets) {
+          for (const oy of offsets) {
+            for (const oz of offsets) {
+              const testOrigin: [number, number, number] = [point[0] + ox, point[1] + oy, point[2] + oz];
+              if (checkRectangle(testOrigin, sw, sh, axis)) {
+                return { position: testOrigin, size: [sw, sh] as [number, number], axis };
+              }
+            }
+          }
+        }
+      }
+    }
+    return null;
+  };
+
   const handleTryPlacePipe = (start: [number, number, number], end: [number, number, number], length: number): boolean => {
     // 防止重复连线带来的重复扣减错误
     const edgeId = CoordinateUtils.getEdgeKey(start, end);
@@ -192,11 +270,25 @@ export default function Stage() {
   const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
     if (selectedTool === 'NONE') {
       setCurrentPoint(null);
+      setPanelPreview(null);
       return;
     }
     
-    const snapped = Snapping.snapToGrid([e.point.x, 0, e.point.z]);
+    const snapped = Snapping.snapToGrid([e.point.x, e.point.y, e.point.z]); // 面板不仅在地面，要在空间内吸附
     
+    // 面板探测逻辑
+    const panelSize = getPanelSize();
+    if (panelSize) {
+      const hole = findValidPanelHole(snapped, panelSize);
+      if (hole) {
+        setPanelPreview(hole);
+        setCurrentPoint(null);
+        return;
+      } else {
+        setPanelPreview(null);
+      }
+    }
+
     if (!startPoint) {
       setCurrentPoint(snapped);
     } else {
@@ -215,8 +307,16 @@ export default function Stage() {
     if (selectedEdgeId) {
       setSelectedEdgeId(null);
     }
+    if (selectedPanelId) {
+      setSelectedPanelId(null);
+    }
 
     if (selectedTool === 'NONE') return;
+
+    if (panelPreview) {
+      placePanel(panelPreview.position, panelPreview.size, panelPreview.axis);
+      return;
+    }
 
     if (!startPoint && currentPoint) {
       if (isStartHoverError) return;
@@ -231,11 +331,14 @@ export default function Stage() {
     e.stopPropagation();
     if (selectedEdgeId) {
       setSelectedEdgeId(null);
+    } else if (selectedPanelId) {
+      setSelectedPanelId(null);
     } else if (startPoint) {
       setStartPoint(null);
     } else {
       useSceneStore.getState().setSelectedTool('NONE');
       setCurrentPoint(null);
+      setPanelPreview(null);
     }
   };
 
@@ -304,6 +407,23 @@ export default function Stage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
             拆除当前管路 (Del)
+          </button>
+        </div>
+      )}
+
+      {selectedPanelId && (
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 flex gap-4">
+          <button 
+            onClick={() => {
+              removePanel(selectedPanelId);
+              setSelectedPanelId(null);
+            }}
+            className="bg-red-500/80 hover:bg-red-500 backdrop-blur-md border border-red-400 text-white text-sm px-8 py-3 rounded-full shadow-2xl transition-all font-semibold tracking-wide flex items-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            拆除当前面板 (Del)
           </button>
         </div>
       )}
@@ -418,6 +538,16 @@ export default function Stage() {
             setStartPoint(null);
           }}
         />
+        <InstancedPanels 
+          panels={panels}
+          onPointerDown={handlePointerDown}
+          onPanelClick={(panelId, e) => {
+            e.stopPropagation();
+            if (!isActuallyClick(e)) return;
+            setSelectedPanelId(panelId);
+            setStartPoint(null);
+          }}
+        />
         {selectedTool !== 'NONE' && currentPoint && !startPoint && (
           <Connector position={currentPoint} isPreview isError={isStartHoverError} />
         )}
@@ -427,6 +557,15 @@ export default function Stage() {
             <Pipe start={startPoint} end={currentPoint} isPreview isError={isSegmentError} />
             <Connector position={currentPoint} isPreview isError={isSegmentError} />
           </group>
+        )}
+        
+        {panelPreview && (
+          <Panel 
+            position={panelPreview.position} 
+            size={panelPreview.size} 
+            axis={panelPreview.axis} 
+            isPreview 
+          />
         )}
         
         {startPoint && !selectedEdgeId && (

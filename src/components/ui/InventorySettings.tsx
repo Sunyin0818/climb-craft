@@ -77,6 +77,9 @@ export default function InventorySettings({ onClose }: { onClose: () => void }) 
           <ConfigRow label={t.inventory.connectors['4WAY']} part="4WAY" />
           <ConfigRow label={t.inventory.connectors['5WAY']} part="5WAY" />
           <ConfigRow label={t.inventory.connectors['6WAY']} part="6WAY" />
+          <div className="h-px bg-white/5 my-2" />
+          <ConfigRow label={t.sidebar.panelLarge.name} part="PANEL_8x8" />
+          <ConfigRow label={t.sidebar.panelSmall.name} part="PANEL_8x4" />
         </div>
 
         <div className="px-6 py-4 border-t border-white/10 bg-black/20 flex justify-end gap-3 shrink-0">
