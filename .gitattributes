@@ -1,0 +1,24 @@
+# 默认行为：Git 会自动识别文本文件。
+# 在提交时将行尾转换为 LF，在检出时将行尾转换为当前操作系统的原生格式（Windows 下为 CRLF，Linux/Mac 下为 LF）。
+* text=auto
+
+# 明确声明哪些文件总是文本文件，并强制在仓库中统一为 LF
+*.js text
+*.ts text
+*.tsx text
+*.json text
+*.css text
+*.md text
+*.html text
+
+# Windows 特有的批处理文件，强制在检出时使用 CRLF，防止在 Windows 上执行失败
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 明确声明二进制文件，Git 不会对它们进行换行符转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
