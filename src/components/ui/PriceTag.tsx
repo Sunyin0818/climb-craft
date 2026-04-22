@@ -7,6 +7,7 @@ import { useInventoryStore, computeUsedCounts, PartType } from '@/store/useInven
 export default function PriceTag() {
   const nodes = useSceneStore((state) => state.nodes);
   const edges = useSceneStore((state) => state.edges);
+  const panels = useSceneStore((state) => state.panels);
   const t = useLocaleStore((state) => state.t);
   const { stock, price } = useInventoryStore();
   
