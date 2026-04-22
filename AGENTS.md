@@ -11,3 +11,10 @@
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
+
+## 3. Git 提交规范 (Git Commit Rules)
+- **提交者信息 (Author Info)**：
+  - `user.name`：必须使用当前大模型的名称（例如：`gemini` 或其他对应的模型名）。
+  - `user.email`：必须固定为 `工具名称@example.com`（例如：`gemini-cli@example.com`）。
+- **换行符处理 (Line Endings)**：
+  - 始终依赖项目根目录的 `.gitattributes` 文件统一处理跨平台问题，强制文本文件在代码库中保持为 LF。
