@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ConnectorShape, useSceneStore } from './useSceneStore';
+import type { ConnectorShape, PanelInstance } from './useSceneStore';
 
 export type PartType = '8' | '6' | '4' | 'STRAIGHT' | 'L' | 'T' | '3WAY' | '4WAY' | '5WAY' | '6WAY' | 'PANEL_8x8' | 'PANEL_8x4';
 
@@ -28,9 +28,9 @@ export const useInventoryStore = create<InventoryState>((set) => ({
 }));
 
 /**
- * 帮助函数：基于当前的 nodes 和 edges，计算全局的物料消耗件数
+ * 帮助函数：基于当前的 nodes、edges 和 panels，计算全局的物料消耗件数
  */
-export const computeUsedCounts = (nodes: Record<string, any>, edges: Record<string, any>): Record<PartType, number> => {
+export const computeUsedCounts = (nodes: Record<string, any>, edges: Record<string, any>, panels: Record<string, PanelInstance>): Record<PartType, number> => {
   const counts: Record<PartType, number> = { 
     '8': 0, '6': 0, '4': 0, 
     'STRAIGHT': 0, 'L': 0, 'T': 0, '3WAY': 0, '4WAY': 0, '5WAY': 0, '6WAY': 0,
@@ -51,7 +51,6 @@ export const computeUsedCounts = (nodes: Record<string, any>, edges: Record<stri
   });
 
   // 统计面板
-  const panels = useSceneStore.getState().panels;
   Object.values(panels).forEach(panel => {
     if (panel.size[0] === 8 && panel.size[1] === 8) counts['PANEL_8x8'] += 1;
     else counts['PANEL_8x4'] += 1;

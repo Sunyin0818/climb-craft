@@ -1,6 +1,6 @@
 'use client';
 
-import { useSceneStore, type ConnectorShape } from '@/store/useSceneStore';
+import { useSceneStore } from '@/store/useSceneStore';
 import { useLocaleStore } from '@/store/useLocaleStore';
 import { useInventoryStore, computeUsedCounts, PartType } from '@/store/useInventoryStore';
 
@@ -11,7 +11,7 @@ export default function PriceTag() {
   const t = useLocaleStore((state) => state.t);
   const { stock, price } = useInventoryStore();
   
-  const counts = computeUsedCounts(nodes, edges);
+  const counts = computeUsedCounts(nodes, edges, panels);
   let totalPrice = 0;
 
   // 计算所有物料超出库存部分的增量成本

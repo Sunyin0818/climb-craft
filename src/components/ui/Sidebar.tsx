@@ -1,11 +1,20 @@
 'use client';
 
 import { useLocaleStore } from '@/store/useLocaleStore';
-import { useSceneStore } from '@/store/useSceneStore';
+import { useSceneStore, type SelectedTool } from '@/store/useSceneStore';
 import clsx from 'clsx';
 import { useState, useMemo } from 'react';
 import InventorySettings from './InventorySettings';
 import ProjectManager from './ProjectManager';
+
+const TOOL_LIST: { tool: SelectedTool; group: 'nav' | 'pipe' | 'panel' }[] = [
+  { tool: 'NONE', group: 'nav' },
+  { tool: 'PIPE_LONG', group: 'pipe' },
+  { tool: 'PIPE_MEDIUM', group: 'pipe' },
+  { tool: 'PIPE_SHORT', group: 'pipe' },
+  { tool: 'PANEL_LARGE', group: 'panel' },
+  { tool: 'PANEL_SMALL', group: 'panel' },
+];
 
 export default function Sidebar() {
   const t = useLocaleStore((state) => state.t);
@@ -36,6 +45,16 @@ export default function Sidebar() {
     };
   }, [nodes]);
 
+  const getToolLabel = (tool: SelectedTool) => {
+    if (tool === 'NONE') return t.sidebar.pointer;
+    if (tool === 'PIPE_LONG') return t.sidebar.pipeLong;
+    if (tool === 'PIPE_MEDIUM') return t.sidebar.pipeMedium;
+    if (tool === 'PIPE_SHORT') return t.sidebar.pipeShort;
+    if (tool === 'PANEL_LARGE') return t.sidebar.panelLarge;
+    if (tool === 'PANEL_SMALL') return t.sidebar.panelSmall;
+    return { name: tool, desc: '' };
+  };
+
   return (
     <div className="absolute top-0 left-0 h-full w-96 bg-white/10 backdrop-blur-md border-r border-white/20 p-6 flex flex-col gap-6 text-white z-10 shadow-2xl">
       <div className="text-2xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-indigo-400 to-cyan-300">
@@ -44,77 +63,52 @@ export default function Sidebar() {
 
       <div className="grid grid-cols-2 gap-3 -mt-2 mb-2">
         <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col min-w-0">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider mb-1 truncate">占地面积 (L×W)</span>
+          <span className="text-[10px] text-white/50 uppercase tracking-wider mb-1 truncate">占地面积 (L×W)</span>
           <span className="text-sm font-bold text-cyan-50 truncate">
             {Object.keys(nodes).length > 0 ? `${(width/10).toFixed(0)} × ${(depth/10).toFixed(0)} cm` : '0 × 0 cm'}
           </span>
         </div>
         <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex flex-col min-w-0">
-          <span className="text-[10px] text-white/40 uppercase tracking-wider mb-1 truncate">最大高度 (H)</span>
+          <span className="text-[10px] text-white/50 uppercase tracking-wider mb-1 truncate">最大高度 (H)</span>
           <span className="text-sm font-bold text-cyan-50 truncate">
             {Object.keys(nodes).length > 0 ? `${(height/10).toFixed(0)} cm` : '0 cm'}
           </span>
         </div>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto overflow-x-hidden space-y-4 pr-1">
         <h3 className="text-xs uppercase tracking-widest text-white/50 font-semibold mb-2">{t.sidebar.title}</h3>
-        
-        {/* Mock Draggable Items */}
-        <div 
-          onClick={() => setSelectedTool('PIPE_LONG')}
-          className={clsx("p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group", 
-            selectedTool === 'PIPE_LONG' ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
-          )}
-        >
-          <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{t.sidebar.pipeLong.name}</div>
-          <div className="text-xs text-white/40">{t.sidebar.pipeLong.desc}</div>
-        </div>
 
-        <div 
-          onClick={() => setSelectedTool('PIPE_MEDIUM')}
-          className={clsx("p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group", 
-            selectedTool === 'PIPE_MEDIUM' ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
-          )}
-        >
-          <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{t.sidebar.pipeMedium.name}</div>
-          <div className="text-xs text-white/40">{t.sidebar.pipeMedium.desc}</div>
-        </div>
+        <div role="radiogroup" aria-label={t.sidebar.title} className="space-y-3">
+          {TOOL_LIST.map(({ tool }, idx) => {
+            const label = getToolLabel(tool);
+            const isActive = selectedTool === tool;
+            const isAfterNav = idx === 1;
+            const isAfterPipe = idx === 4;
 
-        <div 
-          onClick={() => setSelectedTool('PIPE_SHORT')}
-          className={clsx("p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group", 
-            selectedTool === 'PIPE_SHORT' ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
-          )}
-        >
-          <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{t.sidebar.pipeShort.name}</div>
-          <div className="text-xs text-white/40">{t.sidebar.pipeShort.desc}</div>
-        </div>
- 
-        <div className="h-px bg-white/5 my-2" />
- 
-        <div 
-          onClick={() => setSelectedTool('PANEL_LARGE')}
-          className={clsx("p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group", 
-            selectedTool === 'PANEL_LARGE' ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
-          )}
-        >
-          <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{t.sidebar.panelLarge.name}</div>
-          <div className="text-xs text-white/40">{t.sidebar.panelLarge.desc}</div>
-        </div>
- 
-        <div 
-          onClick={() => setSelectedTool('PANEL_SMALL')}
-          className={clsx("p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group", 
-            selectedTool === 'PANEL_SMALL' ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
-          )}
-        >
-          <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{t.sidebar.panelSmall.name}</div>
-          <div className="text-xs text-white/40">{t.sidebar.panelSmall.desc}</div>
+            return (
+              <span key={tool}>
+                {(isAfterNav || isAfterPipe) && <div className="h-px bg-white/5 my-2" />}
+                <button
+                  role="radio"
+                  aria-checked={isActive}
+                  onClick={() => setSelectedTool(tool)}
+                  className={clsx(
+                    "w-full text-left p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group focus:outline-none focus:ring-2 focus:ring-cyan-400/50",
+                    isActive ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
+                  )}
+                >
+                  <div className="text-sm font-medium mb-1 group-hover:text-cyan-300 transition-colors">{label.name}</div>
+                  <div className="text-xs text-white/50">{label.desc}</div>
+                </button>
+              </span>
+            );
+          })}
         </div>
       </div>
       <div className="flex flex-col gap-2 mt-auto">
-        <button 
+        <button
+          aria-label="本地设计草稿库"
           onClick={() => setShowProjectManager(true)}
           className="flex items-center justify-center gap-2 p-3 text-sm font-medium text-white/80 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/40 rounded-xl transition-all border border-indigo-400/30 hover:border-indigo-400 group shadow-lg"
         >
@@ -124,7 +118,8 @@ export default function Sidebar() {
           本地设计草稿库
         </button>
 
-        <button 
+        <button
+          aria-label="库存配置与价格"
           onClick={() => setShowSettings(true)}
           className="flex items-center justify-center gap-2 p-3 text-sm font-medium text-white/60 hover:text-cyan-300 bg-white/5 hover:bg-white/10 rounded-xl transition-all border border-white/10 hover:border-cyan-500/30 group"
         >
@@ -132,7 +127,7 @@ export default function Sidebar() {
           库存配置与价格
         </button>
       </div>
-      
+
       <div className="text-xs text-white/30 text-center mt-2 shrink-0">
         {t.app.version}
       </div>

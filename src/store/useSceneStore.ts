@@ -20,7 +20,7 @@ export interface EdgeInstance {
   length: number; // 实际需要的连杆长度（例如 350mm / 150mm 等）
   color?: string; // 拼接时选用的颜色
 }
- 
+
 export interface PanelInstance {
   id: string; // 坐标与轴向标识
   position: [number, number, number]; // 最小逻辑坐标 [minX, minY, minZ]
@@ -29,22 +29,36 @@ export interface PanelInstance {
   color: string;
 }
 
+type SceneSnapshot = {
+  nodes: Record<string, NodeInstance>;
+  edges: Record<string, EdgeInstance>;
+  panels: Record<string, PanelInstance>;
+};
+
+const MAX_UNDO = 50;
+
 interface SceneState {
   nodes: Record<string, NodeInstance>;
   edges: Record<string, EdgeInstance>;
   panels: Record<string, PanelInstance>;
-  
+
   selectedTool: SelectedTool;
   setSelectedTool: (tool: SelectedTool) => void;
-  
+
   placePipe: (start: [number, number, number], end: [number, number, number], length: number) => void;
   removePipe: (edgeId: string) => void;
-  
+
   placePanel: (position: [number, number, number], size: [number, number], axis: 'x' | 'y' | 'z') => void;
   removePanel: (panelId: string) => void;
-  
+
   loadScene: (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>, panels?: Record<string, PanelInstance>) => void;
   clearScene: () => void;
+
+  undoStack: SceneSnapshot[];
+  redoStack: SceneSnapshot[];
+  pushUndo: () => void;
+  undo: () => void;
+  redo: () => void;
 }
 
 export const recalculateNodeShapes = (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>) => {
@@ -94,15 +108,52 @@ export const recalculateNodeShapes = (nodes: Record<string, NodeInstance>, edges
   return newNodes;
 };
 
-export const useSceneStore = create<SceneState>((set) => ({
+export const useSceneStore = create<SceneState>((set, get) => ({
   nodes: {},
   edges: {},
   panels: {},
   selectedTool: 'NONE',
-  
+
   setSelectedTool: (tool) => set({ selectedTool: tool }),
-  
-  placePipe: (start, end, length) => set((state) => {
+
+  undoStack: [],
+  redoStack: [],
+
+  pushUndo: () => {
+    const { nodes, edges, panels, undoStack } = get();
+    const snapshot: SceneSnapshot = { nodes, edges, panels };
+    const newStack = [...undoStack, snapshot];
+    if (newStack.length > MAX_UNDO) newStack.shift();
+    set({ undoStack: newStack, redoStack: [] });
+  },
+
+  undo: () => {
+    const { undoStack, redoStack, nodes, edges, panels } = get();
+    if (undoStack.length === 0) return;
+    const prev = undoStack[undoStack.length - 1];
+    const current: SceneSnapshot = { nodes, edges, panels };
+    set({
+      undoStack: undoStack.slice(0, -1),
+      redoStack: [...redoStack, current],
+      ...prev,
+    });
+  },
+
+  redo: () => {
+    const { undoStack, redoStack, nodes, edges, panels } = get();
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    const current: SceneSnapshot = { nodes, edges, panels };
+    set({
+      redoStack: redoStack.slice(0, -1),
+      undoStack: [...undoStack, current],
+      ...next,
+    });
+  },
+
+  placePipe: (start, end, length) => {
+    get().pushUndo();
+    set((state) => {
     const startId = start.join(',');
     const endId = end.join(',');
     const edgeId = CoordinateUtils.getEdgeKey(start, end);
@@ -134,53 +185,66 @@ export const useSceneStore = create<SceneState>((set) => ({
       nodes: recalculateNodeShapes(newNodes, newEdges),
       edges: newEdges
     };
-  }),
- 
-  placePanel: (position, size, axis) => set((state) => {
-    const panelId = `panel--${position.join(',')}-${axis}-${size.join(',')}`;
-    if (state.panels[panelId]) return state;
- 
-    const availableColors = ['#ef4444', '#eab308', '#3b82f6', '#22c55e'];
-    const chosenColor = availableColors[Math.floor(Math.random() * availableColors.length)];
- 
-    return {
-      panels: {
-        ...state.panels,
-        [panelId]: { id: panelId, position, size, axis, color: chosenColor }
-      }
-    };
-  }),
- 
-  removePanel: (panelId) => set((state) => {
-    const newPanels = { ...state.panels };
-    delete newPanels[panelId];
-    return { panels: newPanels };
-  }),
- 
-  removePipe: (edgeId) => set((state) => {
-    if (!state.edges[edgeId]) return state;
+  });
+  },
 
-    const edge = state.edges[edgeId];
-    const newEdges = { ...state.edges };
-    delete newEdges[edgeId];
+  placePanel: (position, size, axis) => {
+    get().pushUndo();
+    set((state) => {
+      const panelId = `panel--${position.join(',')}-${axis}-${size.join(',')}`;
+      if (state.panels[panelId]) return state;
 
-    const newNodes = { ...state.nodes };
-    
-    // 如果起点被孤立（无其他边连结），则安全消灭此节点
-    const startOrphan = !Object.values(newEdges).some(e => e.start === edge.start || e.end === edge.start);
-    if (startOrphan) delete newNodes[edge.start];
+      const availableColors = ['#ef4444', '#eab308', '#3b82f6', '#22c55e'];
+      const chosenColor = availableColors[Math.floor(Math.random() * availableColors.length)];
 
-    // 如果终点被孤立，同理消灭此节点
-    const endOrphan = !Object.values(newEdges).some(e => e.start === edge.end || e.end === edge.end);
-    if (endOrphan) delete newNodes[edge.end];
+      return {
+        panels: {
+          ...state.panels,
+          [panelId]: { id: panelId, position, size, axis, color: chosenColor }
+        }
+      };
+    });
+  },
 
-    return {
-      nodes: recalculateNodeShapes(newNodes, newEdges),
-      edges: newEdges
-    };
-  }),
+  removePanel: (panelId) => {
+    get().pushUndo();
+    set((state) => {
+      const newPanels = { ...state.panels };
+      delete newPanels[panelId];
+      return { panels: newPanels };
+    });
+  },
 
-  loadScene: (nodes, edges, panels) => set({ nodes, edges, panels: panels || {} }),
-  
-  clearScene: () => set({ nodes: {}, edges: {}, panels: {}, selectedTool: 'NONE' })
+  removePipe: (edgeId) => {
+    get().pushUndo();
+    set((state) => {
+      if (!state.edges[edgeId]) return state;
+
+      const edge = state.edges[edgeId];
+      const newEdges = { ...state.edges };
+      delete newEdges[edgeId];
+
+      const newNodes = { ...state.nodes };
+
+      // 如果起点被孤立（无其他边连结），则安全消灭此节点
+      const startOrphan = !Object.values(newEdges).some(e => e.start === edge.start || e.end === edge.start);
+      if (startOrphan) delete newNodes[edge.start];
+
+      // 如果终点被孤立，同理消灭此节点
+      const endOrphan = !Object.values(newEdges).some(e => e.start === edge.end || e.end === edge.end);
+      if (endOrphan) delete newNodes[edge.end];
+
+      return {
+        nodes: recalculateNodeShapes(newNodes, newEdges),
+        edges: newEdges
+      };
+    });
+  },
+
+  loadScene: (nodes, edges, panels) => set({ nodes, edges, panels: panels || {}, undoStack: [], redoStack: [] }),
+
+  clearScene: () => {
+    get().pushUndo();
+    set({ nodes: {}, edges: {}, panels: {}, selectedTool: 'NONE' });
+  }
 }));

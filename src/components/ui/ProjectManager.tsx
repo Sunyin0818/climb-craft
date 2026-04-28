@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { db, type Project } from '@/db/schema';
 import { useSceneStore } from '@/store/useSceneStore';
+import { useLocaleStore } from '@/store/useLocaleStore';
 
 interface ProjectManagerProps {
   onClose: () => void;
@@ -13,9 +14,11 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
   const [mounted, setMounted] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProjectName, setNewProjectName] = useState('');
-  
+  const t = useLocaleStore((state) => state.t);
+
   const nodes = useSceneStore((state) => state.nodes);
   const edges = useSceneStore((state) => state.edges);
+  const panels = useSceneStore((state) => state.panels);
   const loadScene = useSceneStore((state) => state.loadScene);
   const clearScene = useSceneStore((state) => state.clearScene);
 
@@ -37,7 +40,7 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
     if (!newProjectName.trim()) return;
     await db.projects.add({
       name: newProjectName.trim(),
-      data: { nodes, edges },
+      data: { nodes, edges, panels },
       updatedAt: Date.now()
     });
     setNewProjectName('');
@@ -46,7 +49,7 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
 
   const handleUpdate = async (id: number) => {
     await db.projects.update(id, {
-      data: { nodes, edges },
+      data: { nodes, edges, panels },
       updatedAt: Date.now()
     });
     fetchProjects();
@@ -54,20 +57,20 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
 
   const handleLoad = (data: any) => {
     if (data && data.nodes && data.edges) {
-      loadScene(data.nodes, data.edges);
+      loadScene(data.nodes, data.edges, data.panels);
       onClose();
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (confirm('确定要删除该设计草稿吗？')) {
+    if (confirm(t.projectManager.confirmDelete)) {
       await db.projects.delete(id);
       fetchProjects();
     }
   };
 
   const handleClear = () => {
-    if (confirm('确定要清空当前场景吗？未保存的进度将丢失。')) {
+    if (confirm(t.projectManager.confirmClear)) {
       clearScene();
       onClose();
     }
@@ -87,7 +90,7 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
       
       <div className="relative bg-[#1a1c23] border border-white/10 shadow-2xl rounded-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
         <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
-          <h2 className="text-xl font-bold text-white tracking-wide">本地设计库</h2>
+          <h2 className="text-xl font-bold text-white tracking-wide">{t.projectManager.title}</h2>
           <button onClick={onClose} className="p-2 -mr-2 text-white/50 hover:text-white transition-colors rounded-lg hover:bg-white/10">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -101,7 +104,7 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
               type="text" 
               value={newProjectName}
               onChange={(e) => setNewProjectName(e.target.value)}
-              placeholder="输入新设计稿名称..."
+              placeholder={t.projectManager.placeholder}
               className="flex-1 min-w-0 bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all font-medium"
             />
             <button 
@@ -109,27 +112,27 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
               disabled={!newProjectName.trim()}
               className="bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:hover:bg-cyan-500 text-neutral-950 font-bold px-6 py-3 rounded-xl transition-colors shadow-lg whitespace-nowrap shrink-0"
             >
-              保存为新草稿
+              {t.projectManager.saveAsNew}
             </button>
           </div>
 
           <div className="space-y-3">
-            <div className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-2 px-1">历史草稿清单</div>
+            <div className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-2 px-1">{t.projectManager.history}</div>
             {projects.length === 0 ? (
               <div className="text-center py-10 text-white/30 text-sm">
-                暂无保存的设计稿
+                {t.projectManager.empty}
               </div>
             ) : (
               projects.map(p => (
                 <div key={p.id} className="group bg-white/5 border border-white/10 hover:border-white/20 p-4 rounded-xl flex items-center justify-between transition-all gap-4">
                   <div className="flex flex-col min-w-0 flex-1">
                     <span className="text-white font-medium text-lg truncate">{p.name}</span>
-                    <span className="text-xs text-white/40 mt-1 truncate">最后修改: {formatDate(p.updatedAt)}</span>
+                    <span className="text-xs text-white/40 mt-1 truncate">{t.projectManager.lastModified}: {formatDate(p.updatedAt)}</span>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button 
                       onClick={() => p.id && handleUpdate(p.id)}
-                      title="用当前界面状态覆盖此草稿"
+                      title={t.projectManager.overwrite}
                       className="p-2 text-white/50 hover:text-cyan-300 hover:bg-cyan-500/10 rounded-lg transition-colors border border-transparent hover:border-cyan-500/30"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -138,7 +141,7 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
                     </button>
                     <button 
                       onClick={() => handleLoad(p.data)}
-                      title="载入此草稿"
+                      title={t.projectManager.load}
                       className="p-2 text-white/50 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-lg transition-colors border border-transparent hover:border-emerald-500/30"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -147,7 +150,7 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
                     </button>
                     <button 
                       onClick={() => p.id && handleDelete(p.id)}
-                      title="删除此草稿"
+                      title={t.projectManager.delete}
                       className="p-2 text-white/50 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors border border-transparent hover:border-red-500/30"
                     >
                       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -169,7 +172,7 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span className="text-sm font-bold">清空当前场景</span>
+            <span className="text-sm font-bold">{t.projectManager.clearScene}</span>
           </button>
         </div>
 
