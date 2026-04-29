@@ -58,6 +58,15 @@ function makePanelId(pos: [number, number, number], axis: Axis, size: [number, n
   return `panel--${pos.join(',')}-${axis}-${size.join(',')}`;
 }
 
+function parseNodeIdToLogicPosition(nodeId: string): [number, number, number] {
+  const [x, y, z] = nodeId.split(',').map(Number);
+  return [
+    CoordinateUtils.toLogic(x),
+    CoordinateUtils.toLogic(y),
+    CoordinateUtils.toLogic(z),
+  ];
+}
+
 function getRectCorners(
   origin: [number, number, number],
   w: number,
@@ -87,8 +96,8 @@ export function enumeratePanelSlots(
 ): PanelSlot[] {
   const nodeMap: Record<string, [number, number, number]> = {};
   for (const edge of Object.values(edges)) {
-    if (!nodeMap[edge.start]) nodeMap[edge.start] = edge.start.split(',').map(Number) as [number, number, number];
-    if (!nodeMap[edge.end]) nodeMap[edge.end] = edge.end.split(',').map(Number) as [number, number, number];
+    if (!nodeMap[edge.start]) nodeMap[edge.start] = parseNodeIdToLogicPosition(edge.start);
+    if (!nodeMap[edge.end]) nodeMap[edge.end] = parseNodeIdToLogicPosition(edge.end);
   }
 
   const sizes: [number, number][] = targetSize[0] === targetSize[1]

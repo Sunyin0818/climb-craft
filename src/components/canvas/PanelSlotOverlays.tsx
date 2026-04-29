@@ -30,13 +30,14 @@ export default function PanelSlotOverlays({
 
       tempObject.rotation.set(0, 0, 0);
       let ox = width / 2, oy = 0, oz = height / 2;
+      let sx = width, sy = thickness, sz = height;
 
       if (axis === 'x') {
-        tempObject.rotation.set(0, 0, Math.PI / 2);
         ox = 0; oy = width / 2; oz = height / 2;
+        sx = thickness; sy = width; sz = height;
       } else if (axis === 'z') {
-        tempObject.rotation.set(Math.PI / 2, 0, 0);
         ox = width / 2; oy = height / 2; oz = 0;
+        sx = width; sy = height; sz = thickness;
       }
 
       tempObject.position.set(
@@ -45,11 +46,7 @@ export default function PanelSlotOverlays({
         slot.position[2] * 50 + oz
       );
 
-      tempObject.scale.set(
-        axis === 'x' ? thickness : width,
-        axis === 'y' ? thickness : height,
-        (axis === 'x' || axis === 'y') ? height : thickness
-      );
+      tempObject.scale.set(sx, sy, sz);
 
       tempObject.updateMatrix();
       meshRef.current?.setMatrixAt(i, tempObject.matrix);

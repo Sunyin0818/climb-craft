@@ -1,6 +1,6 @@
 'use client';
 
-import { Vector3, Euler } from 'three';
+import { Vector3 } from 'three';
 
 interface PanelProps {
   position: [number, number, number];
@@ -22,18 +22,18 @@ export default function Panel({ position, size, axis, color = '#3b82f6', isPrevi
   const height = size[1] * 50;
   const thickness = 10; // 10mm 厚度
 
-  let rotation = new Euler(0, 0, 0);
-  let offset = new Vector3(width / 2, 0, height / 2); // 默认 y 轴
+  const offset = new Vector3(width / 2, 0, height / 2); // 默认 y 轴
+  const scale = new Vector3(width, thickness, height);
 
   if (axis === 'y') {
-    rotation.set(0, 0, 0);
     offset.set(width / 2, 0, height / 2);
+    scale.set(width, thickness, height);
   } else if (axis === 'x') {
-    rotation.set(0, 0, Math.PI / 2);
     offset.set(0, width / 2, height / 2);
+    scale.set(thickness, width, height);
   } else if (axis === 'z') {
-    rotation.set(Math.PI / 2, 0, 0);
     offset.set(width / 2, height / 2, 0);
+    scale.set(width, height, thickness);
   }
 
   return (
@@ -42,10 +42,9 @@ export default function Panel({ position, size, axis, color = '#3b82f6', isPrevi
         position[0] * 50 + offset.x, 
         position[1] * 50 + offset.y, 
         position[2] * 50 + offset.z
-      ]} 
-      rotation={rotation}
+      ]}
     >
-      <boxGeometry args={[axis === 'x' ? thickness : width, axis === 'y' ? thickness : height, (axis === 'x' || axis === 'y') ? height : thickness]} />
+      <boxGeometry args={[scale.x, scale.y, scale.z]} />
       <meshStandardMaterial 
         color={color} 
         transparent={isPreview} 
