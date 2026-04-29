@@ -7,8 +7,7 @@ import { useState, useMemo } from 'react';
 import InventorySettings from './InventorySettings';
 import ProjectManager from './ProjectManager';
 
-const TOOL_LIST: { tool: SelectedTool; group: 'nav' | 'pipe' | 'panel' }[] = [
-  { tool: 'NONE', group: 'nav' },
+const TOOL_LIST: { tool: SelectedTool; group: 'pipe' | 'panel' }[] = [
   { tool: 'PIPE_LONG', group: 'pipe' },
   { tool: 'PIPE_MEDIUM', group: 'pipe' },
   { tool: 'PIPE_SHORT', group: 'pipe' },
@@ -46,7 +45,6 @@ export default function Sidebar() {
   }, [nodes]);
 
   const getToolLabel = (tool: SelectedTool) => {
-    if (tool === 'NONE') return t.sidebar.pointer;
     if (tool === 'PIPE_LONG') return t.sidebar.pipeLong;
     if (tool === 'PIPE_MEDIUM') return t.sidebar.pipeMedium;
     if (tool === 'PIPE_SHORT') return t.sidebar.pipeShort;
@@ -83,12 +81,11 @@ export default function Sidebar() {
           {TOOL_LIST.map(({ tool }, idx) => {
             const label = getToolLabel(tool);
             const isActive = selectedTool === tool;
-            const isAfterNav = idx === 1;
-            const isAfterPipe = idx === 4;
+            const isAfterPipe = idx === 3;
 
             return (
               <span key={tool}>
-                {(isAfterNav || isAfterPipe) && <div className="h-px bg-white/5 my-2" />}
+                {isAfterPipe && <div className="h-px bg-white/5 my-2" />}
                 <button
                   role="radio"
                   aria-checked={isActive}
