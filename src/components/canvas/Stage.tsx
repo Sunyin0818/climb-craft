@@ -10,6 +10,7 @@ import Connector from './Connector';
 import InstancedConnectors from './InstancedConnectors';
 import Panel from './Panel';
 import InstancedPanels from './InstancedPanels';
+import PanelSlotOverlays from './PanelSlotOverlays';
 import AxisCrosshair from './AxisCrosshair';
 import WebGLFallback, { useWebGLState } from './WebGLFallback';
 import CanvasErrorBoundary from './CanvasErrorBoundary';
@@ -24,8 +25,9 @@ export default function Stage() {
     currentPoint, setCurrentPoint,
     selectedEdgeId, setSelectedEdgeId,
     selectedPanelId, setSelectedPanelId,
-    panelPreview,
     toastMsg,
+    panelSlots,
+    hoveredSlotIndex,
     isStartHoverError,
     isSegmentError,
     edgeStartNode,
@@ -246,12 +248,19 @@ export default function Stage() {
           </group>
         )}
 
-        {/* Preview ghost: panel */}
-        {panelPreview && (
+        {/* Panel slot overlays */}
+        {panelSlots.length > 0 && (
+          <PanelSlotOverlays
+            slots={panelSlots}
+          />
+        )}
+
+        {/* Hover preview on slot */}
+        {hoveredSlotIndex !== null && panelSlots[hoveredSlotIndex] && (
           <Panel
-            position={panelPreview.position}
-            size={panelPreview.size}
-            axis={panelPreview.axis}
+            position={panelSlots[hoveredSlotIndex].position}
+            size={panelSlots[hoveredSlotIndex].size}
+            axis={panelSlots[hoveredSlotIndex].axis}
             isPreview
           />
         )}

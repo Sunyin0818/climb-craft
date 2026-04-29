@@ -1,13 +1,60 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { ThreeEvent } from '@react-three/fiber';
 import { useSceneStore } from '@/store/useSceneStore';
 import { useLocaleStore } from '@/store/useLocaleStore';
 import { Snapping } from '@/core/engine/Snapping';
 import { CoordinateUtils } from '@/core/utils/CoordinateUtils';
 import { isPointOnEdgeBody, isSegmentColliding } from '@/core/engine/CollisionUtils';
+import { enumeratePanelSlots, AXIS_IDX } from '@/core/engine/SlotEnumerator';
+import type { PanelSlot, Axis } from '@/core/engine/SlotEnumerator';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import type { Ray } from 'three';
+
+const LU = 50;
+
+/**
+ * 通过射线-平面交叉检测鼠标悬停在哪个槽位上。
+ * 对每个槽位所在的平面测试射线交叉，找到最近的有效槽位。
+ * 不依赖 frameBounds，因此对退化框架（如纯水平面）也能正确工作。
+ */
+function findSlotByRaycast(
+  ray: Ray,
+  slots: PanelSlot[],
+): number {
+  const origin = ray.origin;
+  const direction = ray.direction;
+  let bestT = Infinity;
+  let bestIdx = -1;
+
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
+    const ci = AXIS_IDX[s.axis as Axis];
+    const dirComp = direction.getComponent(ci);
+    if (Math.abs(dirComp) < 1e-10) continue;
+
+    const planeVal = s.position[ci] * LU;
+    const t = (planeVal - origin.getComponent(ci)) / dirComp;
+    if (t <= 0 || t >= bestT) continue;
+
+    const d0Idx = ci === 0 ? 1 : 0;
+    const d1Idx = ci === 2 ? 1 : 2;
+    const hitD0 = origin.getComponent(d0Idx) + t * direction.getComponent(d0Idx);
+    const hitD1 = origin.getComponent(d1Idx) + t * direction.getComponent(d1Idx);
+
+    const sD0 = s.position[d0Idx] * LU;
+    const sD1 = s.position[d1Idx] * LU;
+    const sW = s.size[0] * LU;
+    const sH = s.size[1] * LU;
+
+    if (hitD0 >= sD0 && hitD0 < sD0 + sW && hitD1 >= sD1 && hitD1 < sD1 + sH) {
+      bestT = t;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
 
 export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl | null>) {
   const selectedTool = useSceneStore(s => s.selectedTool);
@@ -24,11 +71,6 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
   const [currentPoint, setCurrentPoint] = useState<[number, number, number] | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedPanelId, setSelectedPanelId] = useState<string | null>(null);
-  const [panelPreview, setPanelPreview] = useState<{
-    position: [number, number, number];
-    size: [number, number];
-    axis: 'x' | 'y' | 'z';
-  } | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const pointerDownPos = useRef<{ x: number, y: number } | null>(null);
 
@@ -61,50 +103,21 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
     return null;
   }, [selectedTool]);
 
-  const findValidPanelHole = useCallback((point: [number, number, number], size: [number, number]) => {
-    const [W, H] = size;
-    const planes: ('x' | 'y' | 'z')[] = ['x', 'y', 'z'];
+  // --- 槽位系统 ---
+  const panelSlots = useMemo<PanelSlot[]>(() => {
+    const size = getPanelSize();
+    if (!size) return [];
+    return enumeratePanelSlots(edges, size, panels);
+  }, [edges, panels, selectedTool, getPanelSize]);
 
-    for (const axis of planes) {
-      const checkRectangle = (origin: [number, number, number], w: number, h: number, ax: 'x' | 'y' | 'z') => {
-        const boundaryEdges: string[] = [];
-        if (ax === 'y') {
-          boundaryEdges.push(CoordinateUtils.getEdgeKey(origin, [origin[0] + w, origin[1], origin[2]]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0] + w, origin[1], origin[2]], [origin[0] + w, origin[1], origin[2] + h]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0] + w, origin[1], origin[2] + h], [origin[0], origin[1], origin[2] + h]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1], origin[2] + h], origin));
-        } else if (ax === 'x') {
-          boundaryEdges.push(CoordinateUtils.getEdgeKey(origin, [origin[0], origin[1] + w, origin[2]]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1] + w, origin[2]], [origin[0], origin[1] + w, origin[2] + h]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1] + w, origin[2] + h], [origin[0], origin[1], origin[2] + h]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1], origin[2] + h], origin));
-        } else if (ax === 'z') {
-          boundaryEdges.push(CoordinateUtils.getEdgeKey(origin, [origin[0] + w, origin[1], origin[2]]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0] + w, origin[1], origin[2]], [origin[0] + w, origin[1] + h, origin[2]]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0] + w, origin[1] + h, origin[2]], [origin[0], origin[1] + h, origin[2]]));
-          boundaryEdges.push(CoordinateUtils.getEdgeKey([origin[0], origin[1] + h, origin[2]], origin));
-        }
-        return boundaryEdges.every(key => edges[key]);
-      };
+  const [hoveredSlotIndex, setHoveredSlotIndex] = useState<number | null>(null);
 
-      const sizesToTry: [number, number][] = W === H ? [[W, H]] : [[W, H], [H, W]];
-
-      for (const [sw, sh] of sizesToTry) {
-        const offsets = [-8, -4, 0];
-        for (const ox of offsets) {
-          for (const oy of offsets) {
-            for (const oz of offsets) {
-              const testOrigin: [number, number, number] = [point[0] + ox, point[1] + oy, point[2] + oz];
-              if (checkRectangle(testOrigin, sw, sh, axis)) {
-                return { position: testOrigin, size: [sw, sh] as [number, number], axis };
-              }
-            }
-          }
-        }
-      }
-    }
-    return null;
-  }, [edges]);
+  const handleSlotClick = useCallback((index: number) => {
+    const slot = panelSlots[index];
+    if (!slot) return;
+    placePanel(slot.position, slot.size, slot.axis);
+  }, [panelSlots, placePanel]);
+  // --- /槽位系统 ---
 
   const handleTryPlacePipe = useCallback((start: [number, number, number], end: [number, number, number], length: number): boolean => {
     const edgeId = CoordinateUtils.getEdgeKey(start, end);
@@ -168,23 +181,19 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
   const handlePointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
     if (selectedTool === 'NONE') {
       setCurrentPoint(null);
-      setPanelPreview(null);
+      return;
+    }
+
+    // 面板工具：通过射线投射检测槽位
+    if (getPanelSize()) {
+      const isGroundNearest = e.intersections.length === 0 || e.intersections[0].object === e.eventObject;
+      if (!isGroundNearest) { setHoveredSlotIndex(null); return; }
+      const idx = findSlotByRaycast(e.ray, panelSlots);
+      setHoveredSlotIndex(idx >= 0 ? idx : null);
       return;
     }
 
     const snapped = Snapping.snapToGrid([e.point.x, e.point.y, e.point.z]);
-
-    const panelSize = getPanelSize();
-    if (panelSize) {
-      const hole = findValidPanelHole(snapped, panelSize);
-      if (hole) {
-        setPanelPreview(hole);
-        setCurrentPoint(null);
-        return;
-      } else {
-        setPanelPreview(null);
-      }
-    }
 
     if (!startPoint) {
       setCurrentPoint(snapped);
@@ -195,7 +204,7 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
         setCurrentPoint(axisSnapped);
       }
     }
-  }, [selectedTool, startPoint, getPanelSize, getTargetLength, findValidPanelHole]);
+  }, [selectedTool, startPoint, getPanelSize, getTargetLength, panelSlots]);
 
   const handleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -205,8 +214,13 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
     if (selectedPanelId) setSelectedPanelId(null);
     if (selectedTool === 'NONE') return;
 
-    if (panelPreview) {
-      placePanel(panelPreview.position, panelPreview.size, panelPreview.axis);
+    // 面板工具：通过射线投射检测并放置槽位
+    if (getPanelSize()) {
+      if (startPoint) return;
+      const isGroundNearest = e.intersections.length === 0 || e.intersections[0].object === e.eventObject;
+      if (!isGroundNearest) return;
+      const idx = findSlotByRaycast(e.ray, panelSlots);
+      if (idx >= 0) handleSlotClick(idx);
       return;
     }
 
@@ -216,7 +230,7 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
     } else if (startPoint && currentPoint) {
       return;
     }
-  }, [isActuallyClick, selectedEdgeId, selectedPanelId, selectedTool, panelPreview, startPoint, currentPoint, isStartHoverError, placePanel]);
+  }, [isActuallyClick, selectedEdgeId, selectedPanelId, selectedTool, startPoint, currentPoint, isStartHoverError, getPanelSize, panelSlots, handleSlotClick]);
 
   const handleContextMenu = useCallback((e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -229,7 +243,6 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
     } else {
       useSceneStore.getState().setSelectedTool('NONE');
       setCurrentPoint(null);
-      setPanelPreview(null);
     }
   }, [selectedEdgeId, selectedPanelId, startPoint]);
 
@@ -242,8 +255,11 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
     currentPoint, setCurrentPoint,
     selectedEdgeId, setSelectedEdgeId,
     selectedPanelId, setSelectedPanelId,
-    panelPreview,
     toastMsg,
+    // Slot system
+    panelSlots,
+    hoveredSlotIndex, setHoveredSlotIndex,
+    handleSlotClick,
     // Derived
     isStartHoverError,
     isSegmentError,
