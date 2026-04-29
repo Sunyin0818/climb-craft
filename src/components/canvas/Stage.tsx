@@ -145,15 +145,15 @@ export default function Stage() {
         />
 
         {/* Ground plane border */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -40, 0]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -40, 0]} renderOrder={-1}>
           <planeGeometry args={[8040, 8040]} />
-          <meshBasicMaterial color="#3b82f6" />
+          <meshBasicMaterial color="#3b82f6" depthWrite={false} />
         </mesh>
 
         {/* Ground plane */}
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -30, 0]}>
           <planeGeometry args={[8000, 8000]} />
-          <meshStandardMaterial color="#111111" roughness={0.9} />
+          <meshStandardMaterial color="#111111" roughness={0.9} depthWrite={false} />
         </mesh>
 
         {/* Invisible interaction plane */}
