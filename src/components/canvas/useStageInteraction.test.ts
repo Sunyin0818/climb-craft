@@ -157,6 +157,8 @@ describe('useStageInteraction', () => {
     };
 
     it('Ctrl+Z -> undo', () => {
+      // 先放管子产生 undo 栈
+      useSceneStore.getState().placePipe([0, 0, 0], [8, 0, 0], 8);
       const spy = vi.spyOn(useSceneStore.getState(), 'undo');
       renderHook(() => useStageInteraction({ current: null } as any));
       press('z', { ctrlKey: true });
@@ -165,6 +167,9 @@ describe('useStageInteraction', () => {
     });
 
     it('Ctrl+Shift+Z -> redo', () => {
+      // 先放管子再撤销，产生 redo 栈
+      useSceneStore.getState().placePipe([0, 0, 0], [8, 0, 0], 8);
+      useSceneStore.getState().undo();
       const spy = vi.spyOn(useSceneStore.getState(), 'redo');
       renderHook(() => useStageInteraction({ current: null } as any));
       press('z', { ctrlKey: true, shiftKey: true });
@@ -173,6 +178,9 @@ describe('useStageInteraction', () => {
     });
 
     it('Ctrl+Y -> redo', () => {
+      // 先放管子再撤销，产生 redo 栈
+      useSceneStore.getState().placePipe([0, 0, 0], [8, 0, 0], 8);
+      useSceneStore.getState().undo();
       const spy = vi.spyOn(useSceneStore.getState(), 'redo');
       renderHook(() => useStageInteraction({ current: null } as any));
       press('y', { ctrlKey: true });
@@ -181,6 +189,8 @@ describe('useStageInteraction', () => {
     });
 
     it('Cmd+Z (macOS) -> undo', () => {
+      // 先放管子产生 undo 栈
+      useSceneStore.getState().placePipe([0, 0, 0], [8, 0, 0], 8);
       const spy = vi.spyOn(useSceneStore.getState(), 'undo');
       renderHook(() => useStageInteraction({ current: null } as any));
       press('z', { metaKey: true });
@@ -208,6 +218,30 @@ describe('useStageInteraction', () => {
       const edgesBefore = useSceneStore.getState().edges;
       press('Delete');
       expect(useSceneStore.getState().edges).toEqual(edgesBefore);
+    });
+
+    it('空栈 Ctrl+Z -> 不调用 undo', () => {
+      const spy = vi.spyOn(useSceneStore.getState(), 'undo');
+      renderHook(() => useStageInteraction({ current: null } as any));
+      press('z', { ctrlKey: true });
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    it('空栈 Ctrl+Shift+Z -> 不调用 redo', () => {
+      const spy = vi.spyOn(useSceneStore.getState(), 'redo');
+      renderHook(() => useStageInteraction({ current: null } as any));
+      press('z', { ctrlKey: true, shiftKey: true });
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
+    it('空栈 Ctrl+Y -> 不调用 redo', () => {
+      const spy = vi.spyOn(useSceneStore.getState(), 'redo');
+      renderHook(() => useStageInteraction({ current: null } as any));
+      press('y', { ctrlKey: true });
+      expect(spy).not.toHaveBeenCalled();
+      spy.mockRestore();
     });
   });
 });

@@ -4,6 +4,8 @@ import { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import { isSegmentColliding } from '@/core/engine/CollisionUtils';
+import { CoordinateUtils } from '@/core/utils/CoordinateUtils';
+import { logPipePlaced, logPipeRemoved, logPanelRemoved, logValidationRejected } from '@/helpers/actionLog';
 import Pipe from './Pipe';
 import InstancedPipes from './InstancedPipes';
 import Connector from './Connector';
@@ -83,7 +85,9 @@ export default function Stage() {
           <button
             aria-label={t.button.deletePipe}
             onClick={() => {
+              const edge = edges[selectedEdgeId];
               removePipe(selectedEdgeId);
+              if (edge) logPipeRemoved(selectedEdgeId, edge.start, edge.end, edge.length);
               setSelectedEdgeId(null);
             }}
             className="bg-red-500/80 hover:bg-red-500 backdrop-blur-md border border-red-400 text-white text-sm px-8 py-3 rounded-full shadow-2xl transition-all font-semibold tracking-wide flex items-center gap-2"
@@ -102,7 +106,9 @@ export default function Stage() {
           <button
             aria-label={t.button.deletePanel}
             onClick={() => {
+              const panel = panels[selectedPanelId];
               removePanel(selectedPanelId);
+              if (panel) logPanelRemoved(selectedPanelId, panel.position, panel.size, panel.axis);
               setSelectedPanelId(null);
             }}
             className="bg-red-500/80 hover:bg-red-500 backdrop-blur-md border border-red-400 text-white text-sm px-8 py-3 rounded-full shadow-2xl transition-all font-semibold tracking-wide flex items-center gap-2"
@@ -193,19 +199,27 @@ export default function Stage() {
               const targetLen = getTargetLength() * 50;
 
               if (nonZeroDiffs > 1) {
-                if (dy > 0.01) showToast(t.toast.notSameLevel);
-                else showToast(t.toast.notOnAxis);
+                if (dy > 0.01) {
+                  showToast(t.toast.notSameLevel);
+                  logValidationRejected('not_same_level', { start: startPoint, end: target });
+                } else {
+                  showToast(t.toast.notOnAxis);
+                  logValidationRejected('not_on_axis', { start: startPoint, end: target });
+                }
                 return;
               }
               if (Math.abs(actualDistance - targetLen) > 0.1) {
                 showToast(t.toast.lengthMismatch(getTargetLength(), Math.round(actualDistance / 50)));
+                logValidationRejected('length_mismatch', { start: startPoint, end: target, expectedLu: getTargetLength(), actualLu: Math.round(actualDistance / 50), expectedDistance: targetLen, actualDistance });
                 return;
               }
               if (isSegmentColliding(startPoint, target, edges, nodes)) {
                 showToast(t.toast.collision);
+                logValidationRejected('collision', { start: startPoint, end: target });
                 return;
               }
               if (handleTryPlacePipe(startPoint, target, getTargetLength())) {
+                logPipePlaced(startPoint, target, getTargetLength(), CoordinateUtils.getEdgeKey(startPoint, target));
                 setStartPoint(target);
               }
             }
@@ -274,9 +288,11 @@ export default function Stage() {
             onClick={(target) => {
               if (isSegmentColliding(startPoint, target, edges, nodes)) {
                 showToast(t.toast.collision);
+                logValidationRejected('collision', { start: startPoint, end: target });
                 return;
               }
               if (handleTryPlacePipe(startPoint, target, getTargetLength())) {
+                logPipePlaced(startPoint, target, getTargetLength(), CoordinateUtils.getEdgeKey(startPoint, target));
                 setStartPoint(target);
               }
             }}
@@ -295,9 +311,11 @@ export default function Stage() {
                 if (getTargetLength() === 0) return;
                 if (isSegmentColliding(edgeStartNode.position, target, edges, nodes)) {
                   showToast(t.toast.collision);
+                  logValidationRejected('collision', { start: edgeStartNode.position, end: target });
                   return;
                 }
                 if (handleTryPlacePipe(edgeStartNode.position, target, getTargetLength())) {
+                  logPipePlaced(edgeStartNode.position, target, getTargetLength(), CoordinateUtils.getEdgeKey(edgeStartNode.position, target));
                   setSelectedEdgeId(null);
                   setStartPoint(target);
                 }
@@ -312,9 +330,11 @@ export default function Stage() {
                 if (getTargetLength() === 0) return;
                 if (isSegmentColliding(edgeEndNode.position, target, edges, nodes)) {
                   showToast(t.toast.collision);
+                  logValidationRejected('collision', { start: edgeEndNode.position, end: target });
                   return;
                 }
                 if (handleTryPlacePipe(edgeEndNode.position, target, getTargetLength())) {
+                  logPipePlaced(edgeEndNode.position, target, getTargetLength(), CoordinateUtils.getEdgeKey(edgeEndNode.position, target));
                   setSelectedEdgeId(null);
                   setStartPoint(target);
                 }

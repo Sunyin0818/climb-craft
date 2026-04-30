@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { db, type Project } from '@/db/schema';
 import { useSceneStore } from '@/store/useSceneStore';
 import { useLocaleStore } from '@/store/useLocaleStore';
+import { logSceneLoaded, logSceneCleared } from '@/helpers/actionLog';
 
 interface ProjectManagerProps {
   onClose: () => void;
@@ -58,6 +59,11 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
   const handleLoad = (data: any) => {
     if (data && data.nodes && data.edges) {
       loadScene(data.nodes, data.edges, data.panels);
+      logSceneLoaded(
+        Object.keys(data.nodes).length,
+        Object.keys(data.edges).length,
+        Object.keys(data.panels ?? {}).length,
+      );
       onClose();
     }
   };
@@ -71,7 +77,11 @@ export default function ProjectManager({ onClose }: ProjectManagerProps) {
 
   const handleClear = () => {
     if (confirm(t.projectManager.confirmClear)) {
+      const nodeCount = Object.keys(nodes).length;
+      const edgeCount = Object.keys(edges).length;
+      const panelCount = Object.keys(panels).length;
       clearScene();
+      logSceneCleared(nodeCount, edgeCount, panelCount);
       onClose();
     }
   };

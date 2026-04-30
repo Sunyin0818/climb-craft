@@ -6,6 +6,8 @@ import clsx from 'clsx';
 import { useState, useMemo } from 'react';
 import InventorySettings from './InventorySettings';
 import ProjectManager from './ProjectManager';
+import FeedbackDialog from './FeedbackDialog';
+import { logToolChanged } from '@/helpers/actionLog';
 
 const TOOL_LIST: { tool: SelectedTool; group: 'pipe' | 'panel' }[] = [
   { tool: 'PIPE_LONG', group: 'pipe' },
@@ -22,6 +24,7 @@ export default function Sidebar() {
   const nodes = useSceneStore((state) => state.nodes);
   const [showSettings, setShowSettings] = useState(false);
   const [showProjectManager, setShowProjectManager] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   const { width, depth, height } = useMemo(() => {
     const nodeValues = Object.values(nodes);
@@ -89,7 +92,12 @@ export default function Sidebar() {
                 <button
                   role="radio"
                   aria-checked={isActive}
-                  onClick={() => setSelectedTool(tool)}
+                  onClick={() => {
+                    if (selectedTool !== tool) {
+                      setSelectedTool(tool);
+                      logToolChanged(tool);
+                    }
+                  }}
                   className={clsx(
                     "w-full text-left p-4 rounded-xl bg-white/5 border transition-colors cursor-pointer group focus:outline-none focus:ring-2 focus:ring-cyan-400/50",
                     isActive ? "border-cyan-400 bg-cyan-900/40" : "border-white/10 hover:bg-white/10"
@@ -123,6 +131,18 @@ export default function Sidebar() {
           <svg className="w-5 h-5 group-hover:rotate-90 transition-transform duration-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
           库存配置与价格
         </button>
+
+        <div className="h-px bg-white/5" />
+
+        <button
+          onClick={() => setShowFeedback(true)}
+          className="flex items-center justify-center gap-2 p-3 text-sm font-medium text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 rounded-xl transition-all border border-amber-400/20 hover:border-amber-400/40 group"
+        >
+          <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          {t.feedback.open}
+        </button>
       </div>
 
       <div className="text-xs text-white/30 text-center mt-2 shrink-0">
@@ -131,6 +151,7 @@ export default function Sidebar() {
 
       {showSettings && <InventorySettings onClose={() => setShowSettings(false)} />}
       {showProjectManager && <ProjectManager onClose={() => setShowProjectManager(false)} />}
+      {showFeedback && <FeedbackDialog onClose={() => setShowFeedback(false)} />}
     </div>
   );
 }

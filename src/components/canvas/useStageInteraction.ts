@@ -11,6 +11,7 @@ import { enumeratePanelSlots } from '@/core/engine/SlotEnumerator';
 import type { PanelSlot } from '@/core/engine/SlotEnumerator';
 import { findSlotByRaycast } from './SlotRaycast';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
+import { logUndo, logRedo, logPipeRemoved, logPanelRemoved, logPanelPlaced, logToolChanged, logValidationRejected } from '@/helpers/actionLog';
 
 export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl | null>) {
   const selectedTool = useSceneStore(s => s.selectedTool);
@@ -71,13 +72,17 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
   const handleSlotClick = useCallback((index: number) => {
     const slot = panelSlots[index];
     if (!slot) return;
-    placePanel(slot.position, slot.size, slot.axis);
+    const panelId = placePanel(slot.position, slot.size, slot.axis);
+    logPanelPlaced(slot.position, slot.size, slot.axis, panelId);
   }, [panelSlots, placePanel]);
   // --- /槽位系统 ---
 
   const handleTryPlacePipe = useCallback((start: [number, number, number], end: [number, number, number], length: number): boolean => {
     const edgeId = CoordinateUtils.getEdgeKey(start, end);
-    if (edges[edgeId]) return false;
+    if (edges[edgeId]) {
+      logValidationRejected('duplicate_edge', { start, end, length, edgeId });
+      return false;
+    }
     placePipe(start, end, length);
     return true;
   }, [edges, placePipe]);
@@ -97,25 +102,41 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
-          useSceneStore.getState().redo();
+          const { redoStack } = useSceneStore.getState();
+          if (redoStack.length > 0) {
+            useSceneStore.getState().redo();
+            logRedo();
+          }
         } else {
-          useSceneStore.getState().undo();
+          const { undoStack } = useSceneStore.getState();
+          if (undoStack.length > 0) {
+            useSceneStore.getState().undo();
+            logUndo();
+          }
         }
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
         e.preventDefault();
-        useSceneStore.getState().redo();
+        const { redoStack } = useSceneStore.getState();
+        if (redoStack.length > 0) {
+          useSceneStore.getState().redo();
+          logRedo();
+        }
         return;
       }
       // Delete selected edge
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEdgeId) {
+        const edge = edges[selectedEdgeId];
         removePipe(selectedEdgeId);
+        if (edge) logPipeRemoved(selectedEdgeId, edge.start, edge.end, edge.length);
         setSelectedEdgeId(null);
       }
       // Delete selected panel
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPanelId) {
+        const panel = panels[selectedPanelId];
         removePanel(selectedPanelId);
+        if (panel) logPanelRemoved(selectedPanelId, panel.position, panel.size, panel.axis);
         setSelectedPanelId(null);
       }
     };
@@ -131,7 +152,10 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
     setCurrentPoint(null);
     setSelectedEdgeId(null);
     setSelectedPanelId(null);
-    useSceneStore.getState().setSelectedTool('NONE');
+    if (useSceneStore.getState().selectedTool !== 'NONE') {
+      useSceneStore.getState().setSelectedTool('NONE');
+      logToolChanged('NONE');
+    }
   }, [orbitRef]);
 
   const handlePointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
@@ -197,7 +221,10 @@ export function useStageInteraction(orbitRef: React.RefObject<OrbitControlsImpl 
     } else if (startPoint) {
       setStartPoint(null);
     } else {
-      useSceneStore.getState().setSelectedTool('NONE');
+      if (useSceneStore.getState().selectedTool !== 'NONE') {
+        useSceneStore.getState().setSelectedTool('NONE');
+        logToolChanged('NONE');
+      }
       setCurrentPoint(null);
     }
   }, [selectedEdgeId, selectedPanelId, startPoint]);

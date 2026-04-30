@@ -48,7 +48,7 @@ interface SceneState {
   placePipe: (start: [number, number, number], end: [number, number, number], length: number) => void;
   removePipe: (edgeId: string) => void;
 
-  placePanel: (position: [number, number, number], size: [number, number], axis: 'x' | 'y' | 'z') => void;
+  placePanel: (position: [number, number, number], size: [number, number], axis: 'x' | 'y' | 'z') => string;
   removePanel: (panelId: string) => void;
 
   loadScene: (nodes: Record<string, NodeInstance>, edges: Record<string, EdgeInstance>, panels?: Record<string, PanelInstance>) => void;
@@ -189,9 +189,9 @@ export const useSceneStore = create<SceneState>((set, get) => ({
   },
 
   placePanel: (position, size, axis) => {
+    const panelId = `panel--${position.join(',')}-${axis}-${size.join(',')}`;
     get().pushUndo();
     set((state) => {
-      const panelId = `panel--${position.join(',')}-${axis}-${size.join(',')}`;
       if (state.panels[panelId]) return state;
 
       const availableColors = ['#ef4444', '#eab308', '#3b82f6', '#22c55e'];
@@ -204,6 +204,7 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         }
       };
     });
+    return panelId;
   },
 
   removePanel: (panelId) => {
